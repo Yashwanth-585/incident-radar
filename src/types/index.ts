@@ -1,5 +1,7 @@
 export type Severity = "critical" | "high" | "medium" | "low" | "info";
 
+export type IncidentStatus = "active" | "investigating" | "resolved" | "mitigated";
+
 export type EventSource =
   | "GitHub"
   | "Datadog"
@@ -9,7 +11,8 @@ export type EventSource =
   | "Kubernetes"
   | "Payments"
   | "Redis"
-  | "PagerDuty";
+  | "PagerDuty"
+  | "Correlation Agent";
 
 export type EventType =
   | "deployment"
@@ -18,7 +21,8 @@ export type EventType =
   | "alert"
   | "error"
   | "health"
-  | "resource";
+  | "resource"
+  | "business_failure";
 
 export interface Event {
   id: string;
@@ -29,6 +33,9 @@ export interface Event {
   message: string;
   severity: Severity;
   incidentId?: string;
+  metric?: string;
+  value?: number | string | null;
+  metadata?: Record<string, unknown>;
 }
 
 export interface Evidence {
@@ -52,7 +59,7 @@ export interface Incident {
   title: string;
   severity: Severity;
   confidence: number;
-  status: "active" | "investigating" | "resolved" | "mitigated";
+  status: IncidentStatus;
   service: string;
   description: string;
   rootCause: string;
