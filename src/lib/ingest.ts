@@ -44,30 +44,30 @@ export const supabase:
 
 export function buildIncidentBundle(payload: AgentIncidentPayload): IncidentBundle {
   const incident = mapAgentOutputToIncident(payload);
-  const events = (payload.events ?? []).map((event) => ({
-    id: event.event_id,
+  const events = (payload.events ?? []).map((event, index) => ({
+    id: event.event_id ?? event.id ?? `${payload.incident_id}-evt-${index + 1}`,
     incident_id: payload.incident_id,
     service: event.service ?? payload.service ?? "unknown-service",
     source: event.source ?? "Application Logs",
-    event_type: normalizeEventType(event.event_type),
+    event_type: normalizeEventType(event.event_type ?? event.eventType),
     message: event.message ?? "Correlated event",
     severity: normalizeSeverity(event.severity as string),
     timestamp: event.timestamp ?? payload.time_window?.start ?? incident.startTime,
     metric: event.metric ?? null,
     value: event.value ?? null,
     metadata: {
-      raw_type: event.event_type,
+      raw_type: event.event_type ?? event.eventType,
       raw_severity: event.severity,
       ...(event.metric ? { metric: event.metric } : {}),
       ...(event.value !== undefined && event.value !== null ? { value: event.value } : {}),
     },
   }));
 
-  const relationships = (payload.relationships ?? []).map((relationship) => ({
+  const relationships = (payload.relationships ?? []).map((relationship, index) => ({
     incident_id: payload.incident_id,
-    from_event_id: relationship.from,
-    to_event_id: relationship.to,
-    relationship_type: relationship.type,
+    from_event_id: relationship.from ?? relationship.from_event ?? `${payload.incident_id}-evt-${index + 1}-from`,
+    to_event_id: relationship.to ?? relationship.to_event ?? `${payload.incident_id}-evt-${index + 1}-to`,
+    relationship_type: relationship.type ?? relationship.relationship ?? "PRECEDES",
     metadata: {
       source: "correlation_agent",
     },

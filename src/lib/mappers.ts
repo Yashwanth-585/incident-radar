@@ -5,12 +5,15 @@ export type AgentRelationshipType = "PRECEDES" | "CAUSES" | "CORRELATES_WITH" | 
 export type AgentSeverity = "CRITICAL" | "WARNING" | "INFO" | "ERROR" | "LOW" | "MEDIUM" | "HIGH" | Severity | string;
 
 export interface AgentIncidentEvent {
-  event_id: string;
+  event_id?: string;
+  id?: string;
   service?: string;
   event_type?: string;
+  eventType?: string;
   severity?: AgentSeverity;
   source?: string;
   incidentId?: string;
+  tenantId?: string;
   message?: string;
   metric?: string;
   value?: number | string | null;
@@ -19,9 +22,12 @@ export interface AgentIncidentEvent {
 }
 
 export interface AgentIncidentRelationship {
-  from: string;
-  to: string;
-  type: AgentRelationshipType;
+  from?: string;
+  to?: string;
+  type?: AgentRelationshipType;
+  from_event?: string;
+  to_event?: string;
+  relationship?: AgentRelationshipType;
 }
 
 export interface AgentIncidentPayload {
@@ -83,8 +89,10 @@ const eventTypeMap: Record<string, EventType> = {
 const evidenceLookup: Record<string, string> = {
   temporal_proximity: "The events cluster closely in time, indicating a likely shared incident window.",
   service_overlap: "The affected services overlap across the same incident sequence.",
+  service_dependency: "The service dependency chain explains the propagation pattern across the incident.",
   dependency_chain: "The service dependencies and downstream effects line up with the observed blast radius.",
   semantic_similarity: "The event messages share a consistent failure pattern and alert context.",
+  metric_relationship: "The metric deltas align with the observed service degradation and error growth.",
   causal_sequence: "The event chain shows an ordered progression from trigger to impact.",
   default: "The correlation engine flagged this event pattern as part of the incident.",
 };
@@ -114,15 +122,18 @@ export function normalizeEventType(value?: string): EventType {
 
 export function normalizeEventSource(value?: string): EventSource {
   const source = `${value ?? "Application Logs"}`.trim();
-  if (source === "GitHub" || source === "github") return "GitHub";
-  if (source === "Datadog" || source === "datadog") return "Datadog";
-  if (source === "AWS" || source === "aws") return "AWS";
-  if (source === "PostgreSQL" || source === "postgresql") return "PostgreSQL";
-  if (source === "Application Logs" || source === "application_logs") return "Application Logs";
-  if (source === "Kubernetes" || source === "kubernetes") return "Kubernetes";
-  if (source === "Payments" || source === "payments") return "Payments";
-  if (source === "Redis" || source === "redis") return "Redis";
-  if (source === "PagerDuty" || source === "pagerduty") return "PagerDuty";
+  const normalized = source.toLowerCase();
+
+  if (["github", "github_actions", "deployment", "deployments", "git"].includes(normalized)) return "GitHub";
+  if (["datadog", "metrics", "metric"].includes(normalized)) return "Datadog";
+  if (["aws", "cloudwatch"].includes(normalized)) return "AWS";
+  if (["postgresql", "postgres", "database", "db"].includes(normalized)) return "PostgreSQL";
+  if (["application logs", "application_logs", "log", "logs", "app logs"].includes(normalized)) return "Application Logs";
+  if (["kubernetes", "k8s", "kube"].includes(normalized)) return "Kubernetes";
+  if (["payments", "payment"].includes(normalized)) return "Payments";
+  if (["redis", "cache"].includes(normalized)) return "Redis";
+  if (["pagerduty", "oncall"].includes(normalized)) return "PagerDuty";
+
   return "Application Logs";
 }
 
@@ -155,8 +166,14 @@ function buildTimelineFromRelationships(
   events: AgentIncidentEvent[],
   relationships: AgentIncidentRelationship[] = []
 ): TimelineItem[] {
-  const eventMap = new Map(events.map((event) => [event.event_id, event]));
-  const edges = relationships.filter((relationship) => relationship.type === "PRECEDES");
+  const eventMap = new Map(events.map((event) => [event.event_id ?? event.id, event]));
+  const edges = relationships
+    .map((relationship) => ({
+      from: relationship.from ?? relationship.from_event,
+      to: relationship.to ?? relationship.to_event,
+      type: relationship.type ?? relationship.relationship,
+    }))
+    .filter((relationship) => relationship.type === "PRECEDES" && relationship.from && relationship.to);
 
   const orderedIds: string[] = [];
   const visited = new Set<string>();
@@ -166,7 +183,11 @@ function buildTimelineFromRelationships(
     visited.add(id);
     orderedIds.push(id);
 
-    const nextMoves = edges.filter((edge) => edge.from === id).map((edge) => edge.to);
+    const nextMoves = edges
+      .filter((edge) => edge.from === id)
+      .map((edge) => edge.to)
+      .filter((nextId): nextId is string => Boolean(nextId));
+
     for (const nextId of nextMoves) {
       visit(nextId);
     }
@@ -174,29 +195,44 @@ function buildTimelineFromRelationships(
 
   const roots = edges
     .map((edge) => edge.from)
+    .filter((fromId): fromId is string => Boolean(fromId))
     .filter((fromId) => !edges.some((edge) => edge.to === fromId));
 
-  for (const rootId of roots.length ? roots : events.map((event) => event.event_id)) {
+  const rootIds = (roots.length ? roots : events.map((event) => event.event_id ?? event.id)).filter(
+    (eventId): eventId is string => Boolean(eventId)
+  );
+
+  for (const rootId of rootIds) {
     visit(rootId);
   }
 
   const trailing = events
-    .map((event) => event.event_id)
+    .map((event) => event.event_id ?? event.id)
+    .filter((eventId): eventId is string => Boolean(eventId))
     .filter((eventId) => !orderedIds.includes(eventId));
 
   const finalOrder = [...orderedIds, ...trailing];
 
-  return finalOrder.map((eventId, index) => {
-    const event = eventMap.get(eventId);
-    if (!event) return null;
+  return finalOrder
+    .map((eventId) => {
+      const event = eventMap.get(eventId);
+      if (!event) return null;
 
-    return {
-      time: event.timestamp ?? new Date().toISOString(),
-      title: event.message ?? "Event",
-      detail: `${event.service ?? "unknown-service"} · ${normalizeEventType(event.event_type)}`,
-      icon: event.severity === "critical" ? "alert" : event.severity === "high" ? "activity" : "circle",
-    };
-  }).filter(Boolean) as TimelineItem[];
+      const eventType = normalizeEventType(event.event_type ?? event.eventType);
+
+      return {
+        time: event.timestamp ?? new Date().toISOString(),
+        title: event.message ?? "Event",
+        detail: `${event.service ?? "unknown-service"} · ${eventType}`,
+        icon:
+          normalizeSeverity(event.severity as string) === "critical"
+            ? "alert"
+            : normalizeSeverity(event.severity as string) === "high"
+              ? "activity"
+              : "circle",
+      };
+    })
+    .filter(Boolean) as TimelineItem[];
 }
 
 export function mapAgentOutputToIncident(payload: AgentIncidentPayload): Incident {
@@ -205,19 +241,21 @@ export function mapAgentOutputToIncident(payload: AgentIncidentPayload): Inciden
   const incidentSeverity = deriveIncidentSeverity(events) || normalizeSeverity(payload.severity);
 
   const mappedEvents: Event[] = events.map((event) => ({
-    id: event.event_id,
+    id: event.event_id ?? event.id ?? `${payload.incident_id}-${Math.random().toString(36).slice(2, 9)}`,
     timestamp: event.timestamp ?? payload.time_window?.start ?? new Date().toISOString(),
     service: event.service ?? payload.service ?? "unknown-service",
-    source: normalizeEventSource(event.source),
-    type: normalizeEventType(event.event_type),
+    source: normalizeEventSource(event.source ?? (event.eventType?.includes("deployment") ? "deployment" : undefined)),
+    type: normalizeEventType(event.event_type ?? event.eventType),
     message: event.message ?? "Correlated event",
     severity: normalizeSeverity(event.severity as string),
     incidentId: event.incidentId ?? payload.incident_id,
     metric: event.metric,
     value: event.value ?? undefined,
     metadata: {
-      rawType: event.event_type,
+      rawType: event.event_type ?? event.eventType,
       rawSeverity: event.severity,
+      tenantId: event.tenantId,
+      ...(event.metadata ? event.metadata : {}),
       ...(event.metric ? { metric: event.metric } : {}),
       ...(event.value !== undefined && event.value !== null ? { value: event.value } : {}),
     },

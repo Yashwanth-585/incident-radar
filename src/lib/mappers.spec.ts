@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mapAgentOutputToIncident, normalizeEventType, normalizeSeverity } from "./mappers.ts";
+import { mapAgentOutputToIncident, normalizeEventType, normalizeSeverity } from "./mappers";
 
 test("normalizeSeverity maps agent values to canonical UI severities", () => {
   assert.equal(normalizeSeverity("CRITICAL"), "critical");

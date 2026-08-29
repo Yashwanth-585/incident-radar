@@ -72,10 +72,13 @@ declare
   incident_confidence double precision;
   affected_services text[];
   event_item jsonb;
+  event_severity_rank int;
+  relationship_from text;
+  relationship_to text;
+  relationship_type text;
 begin
   incident_id := payload->>'incident_id';
   incident_title := coalesce(payload->>'incident_title', 'Untitled incident');
-  incident_severity := lower(coalesce(payload->>'severity', 'info'));
   incident_status := lower(coalesce(payload->>'status', 'active'));
   incident_service := coalesce(payload->>'service', 'unknown-service');
   incident_start := coalesce((payload->'time_window'->>'start')::timestamptz, now());
@@ -88,7 +91,31 @@ begin
   );
   affected_services := coalesce(array(select jsonb_array_elements_text(payload->'affected_services')), array[]::text[]);
 
-  if incident_severity = 'warning' then
+  event_severity_rank := null;
+  select max(
+    case
+      when lower(coalesce(item->>'severity', 'info')) in ('critical', 'severe', 'error') then 5
+      when lower(coalesce(item->>'severity', 'info')) = 'warning' then 3
+      when lower(coalesce(item->>'severity', 'info')) = 'high' then 4
+      when lower(coalesce(item->>'severity', 'info')) = 'medium' then 3
+      when lower(coalesce(item->>'severity', 'info')) = 'low' then 2
+      when lower(coalesce(item->>'severity', 'info')) = 'info' then 1
+      else 1
+    end
+  )
+  into event_severity_rank
+  from jsonb_array_elements(coalesce(payload->'events', '[]'::jsonb)) as item;
+
+  incident_severity := lower(coalesce(payload->>'severity', 'info'));
+  if event_severity_rank is not null then
+    case
+      when event_severity_rank >= 5 then incident_severity := 'critical';
+      when event_severity_rank = 4 then incident_severity := 'high';
+      when event_severity_rank = 3 then incident_severity := 'medium';
+      when event_severity_rank = 2 then incident_severity := 'low';
+      else incident_severity := 'info';
+    end case;
+  elsif incident_severity = 'warning' then
     incident_severity := 'medium';
   elsif incident_severity not in ('critical', 'high', 'medium', 'low', 'info') then
     incident_severity := 'info';
@@ -140,21 +167,23 @@ begin
       timestamp, metric, value, metadata
     )
     values (
-      event_item->>'event_id',
+      coalesce(event_item->>'event_id', event_item->>'id'),
       incident_id,
       coalesce(event_item->>'service', incident_service),
       coalesce(event_item->>'source', 'Application Logs'),
-      lower(replace(coalesce(event_item->>'event_type', 'log'), '.', '_')),
+      lower(replace(coalesce(event_item->>'event_type', event_item->>'eventType', 'log'), '.', '_')),
       coalesce(event_item->>'message', 'Correlated event'),
       case
         when lower(coalesce(event_item->>'severity', 'info')) = 'warning' then 'medium'
+        when lower(coalesce(event_item->>'severity', 'info')) = 'error' then 'high'
+        when lower(coalesce(event_item->>'severity', 'info')) = 'severe' then 'high'
         else lower(coalesce(event_item->>'severity', 'info'))
       end,
       coalesce((event_item->>'timestamp')::timestamptz, incident_start),
       event_item->>'metric',
       case when event_item->>'value' is null then null else (event_item->>'value')::double precision end,
       jsonb_strip_nulls(jsonb_build_object(
-        'raw_type', event_item->>'event_type',
+        'raw_type', coalesce(event_item->>'event_type', event_item->>'eventType'),
         'raw_severity', event_item->>'severity',
         'metric', event_item->>'metric',
         'value', event_item->'value'
@@ -176,14 +205,18 @@ begin
 
   for event_item in select jsonb_array_elements(coalesce(payload->'relationships', '[]'::jsonb))
   loop
+    relationship_from := coalesce(event_item->>'from', event_item->>'from_event');
+    relationship_to := coalesce(event_item->>'to', event_item->>'to_event');
+    relationship_type := coalesce(event_item->>'type', event_item->>'relationship', 'PRECEDES');
+
     insert into public.event_relationships (
       incident_id, from_event_id, to_event_id, relationship_type, metadata
     )
     values (
       incident_id,
-      event_item->>'from',
-      event_item->>'to',
-      coalesce(event_item->>'type', 'PRECEDES'),
+      relationship_from,
+      relationship_to,
+      relationship_type,
       jsonb_build_object('source', 'correlation_agent')
     )
     on conflict (incident_id, from_event_id, to_event_id, relationship_type)
