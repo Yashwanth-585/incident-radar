@@ -1,49 +1,44 @@
-'use client';
+"use client";
 
-import React from 'react';
-import { Search, Bell, ChevronDown } from 'lucide-react';
+import { Bell, Search, ChevronDown, Command } from "lucide-react";
 
-interface HeaderProps {
-  title: string;
-  subtitle?: string;
-}
-
-export function Header({ title, subtitle }: HeaderProps) {
+export function Header({ title }: { title?: string }) {
   return (
-    <header className="sticky top-0 z-30 bg-slate-900/80 backdrop-blur border-b border-slate-800">
-      <div className="flex items-center justify-between px-8 py-4">
-        <div>
-          <h1 className="text-2xl font-semibold text-slate-100">{title}</h1>
-          {subtitle && <p className="text-sm text-slate-400 mt-1">{subtitle}</p>}
+    <header className="sticky top-0 z-30 flex h-12 items-center justify-between border-b border-[#1f1f24] bg-[#0c0c0e]/95 backdrop-blur-md px-4 lg:px-6">
+      <div className="flex items-center gap-3 min-w-0">
+        {title && (
+          <h1 className="text-[13px] font-medium text-zinc-400 truncate">
+            {title}
+          </h1>
+        )}
+      </div>
+
+      <div className="flex items-center gap-1.5 sm:gap-2">
+        <div className="hidden md:flex items-center gap-2 rounded-md border border-[#27272a] bg-[#121216] px-2.5 py-1.5 min-w-[200px]">
+          <Search className="h-3.5 w-3.5 text-zinc-600 shrink-0" />
+          <input
+            type="text"
+            placeholder="Search incidents, services..."
+            className="bg-transparent text-[13px] text-zinc-300 placeholder:text-zinc-600 outline-none w-full"
+          />
+          <kbd className="hidden lg:inline-flex items-center gap-0.5 rounded border border-zinc-800 bg-zinc-900 px-1.5 py-0.5 text-[10px] text-zinc-600 font-mono">
+            <Command className="h-2.5 w-2.5" />K
+          </kbd>
         </div>
 
-        <div className="flex items-center gap-6">
-          {/* Search */}
-          <div className="hidden md:flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-800 border border-slate-700">
-            <Search className="w-4 h-4 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search..."
-              className="bg-transparent text-sm text-slate-300 placeholder-slate-500 outline-none w-48"
-            />
-          </div>
+        <button className="relative rounded-md p-1.5 text-zinc-500 hover:bg-zinc-900 hover:text-zinc-300 transition-colors">
+          <Bell className="h-4 w-4" />
+          <span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-red-500 ring-2 ring-[#0c0c0e]" />
+        </button>
 
-          {/* Notifications */}
-          <button className="relative p-2 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-lg transition-colors">
-            <Bell className="w-5 h-5" />
-            <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
-          </button>
+        <button className="hidden sm:flex items-center gap-1.5 rounded-md border border-[#27272a] bg-[#121216] px-2 py-1 text-[12px] text-zinc-400 hover:border-zinc-700 hover:text-zinc-300 transition-colors">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+          Production
+          <ChevronDown className="h-3 w-3 text-zinc-600" />
+        </button>
 
-          {/* Environment selector */}
-          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm text-slate-300 hover:text-slate-100 cursor-pointer">
-            <span>Production</span>
-            <ChevronDown className="w-4 h-4" />
-          </div>
-
-          {/* User avatar */}
-          <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-medium text-sm">
-            SR
-          </div>
+        <div className="ml-1 h-7 w-7 rounded-full bg-gradient-to-br from-zinc-700 to-zinc-800 ring-1 ring-zinc-700 flex items-center justify-center text-[10px] font-semibold text-zinc-300 tracking-tight">
+          SR
         </div>
       </div>
     </header>

@@ -1,85 +1,50 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect } from 'react';
-import { Layout } from '@/components/layout';
-import { ServiceCard, DependencyGraph } from '@/components/services';
-import { LoadingState } from '@/components/ui';
-import { getServices } from '@/lib/api';
-import { Service } from '@/types';
+import { useEffect, useState } from "react";
+import { AppShell } from "@/components/layout/AppShell";
+import { ServiceCard } from "@/components/services/ServiceCard";
+import { DependencyGraph } from "@/components/services/DependencyGraph";
+import { getServices } from "@/lib/api";
+import type { Service } from "@/types";
+import { CardSkeleton } from "@/components/ui/LoadingState";
 
 export default function ServicesPage() {
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadServices();
+    getServices().then((data) => {
+      setServices(data);
+      setLoading(false);
+    });
   }, []);
 
-  const loadServices = async () => {
-    setLoading(true);
-    try {
-      const data = await getServices();
-      setServices(data);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (loading) {
-    return (
-      <Layout title="Services">
-        <LoadingState />
-      </Layout>
-    );
-  }
-
-  const criticalServices = services.filter((s) => s.health === 'critical');
-  const degradedServices = services.filter((s) => s.health === 'degraded');
-  const healthyServices = services.filter((s) => s.health === 'healthy');
-
   return (
-    <Layout
-      title="Services"
-      subtitle="Service health, performance metrics, and dependencies"
-    >
-      <div className="space-y-8">
-        {/* Dependency Graph */}
-        <DependencyGraph services={services} />
+    <AppShell title="Services">
+      <div className="space-y-6 max-w-6xl">
+        <div>
+          <h2 className="text-xl font-semibold text-zinc-50">Services</h2>
+          <p className="text-sm text-zinc-500 mt-1">
+            Health and dependency overview across production services.
+          </p>
+        </div>
 
-        {/* Service Cards by Health */}
-        {criticalServices.length > 0 && (
-          <div className="space-y-4">
-            <h2 className="text-lg font-semibold text-slate-100">🔴 Critical Services</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {criticalServices.map((service) => (
-                <ServiceCard key={service.id} service={service} />
-              ))}
-            </div>
+        {loading ? (
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <CardSkeleton />
+            <CardSkeleton />
+            <CardSkeleton />
+          </div>
+        ) : (
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {services.map((s) => (
+              <ServiceCard key={s.id} service={s} />
+            ))}
           </div>
         )}
 
-        {degradedServices.length > 0 && (
-          <div className="space-y-4">
-            <h2 className="text-lg font-semibold text-slate-100">🟡 Degraded Services</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {degradedServices.map((service) => (
-                <ServiceCard key={service.id} service={service} />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {healthyServices.length > 0 && (
-          <div className="space-y-4">
-            <h2 className="text-lg font-semibold text-slate-100">🟢 Healthy Services</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {healthyServices.map((service) => (
-                <ServiceCard key={service.id} service={service} />
-              ))}
-            </div>
-          </div>
-        )}
+        <DependencyGraph />
       </div>
-    </Layout>
+    </AppShell>
   );
 }

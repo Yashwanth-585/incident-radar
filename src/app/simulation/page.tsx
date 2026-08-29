@@ -1,166 +1,128 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect } from 'react';
-import { Layout } from '@/components/layout';
-import { SimulationCard, SimulationProgress, SimulationStage } from '@/components/simulation';
-import { Card, LoadingState, Toast } from '@/components/ui';
-import { getScenarios, runSimulation } from '@/lib/api';
-import { Scenario } from '@/types';
+import { useEffect, useState } from "react";
+import { AppShell } from "@/components/layout/AppShell";
+import { SimulationCard } from "@/components/simulation/SimulationCard";
+import { SimulationProgress } from "@/components/simulation/SimulationProgress";
+import { getScenarios, runSimulation } from "@/lib/api";
+import type { Scenario, SimulationState } from "@/types";
+import { useApp } from "@/context/AppContext";
+import { CardSkeleton } from "@/components/ui/LoadingState";
 
 export default function SimulationPage() {
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [loading, setLoading] = useState(true);
-  const [running, setRunning] = useState(false);
-  const [selectedScenario, setSelectedScenario] = useState<string | null>(null);
-  const [stages, setStages] = useState<SimulationStage[]>([]);
-  const [result, setResult] = useState<{
-    finalEventCount: number;
-    candidateIncidents: number;
-    confirmedIncidents: number;
-  } | null>(null);
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' } | null>(null);
+  const [localSim, setLocalSim] = useState<SimulationState>({
+    running: false,
+    stage: 0,
+    message: "",
+    eventsGenerated: 0,
+    candidates: 0,
+    incidents: 0,
+  });
+  const { addToast } = useApp();
 
   useEffect(() => {
-    loadScenarios();
+    getScenarios().then((data) => {
+      setScenarios(data);
+      setLoading(false);
+    });
   }, []);
 
-  const loadScenarios = async () => {
-    setLoading(true);
-    try {
-      const data = await getScenarios();
-      setScenarios(data);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const handleRun = async (scenarioId: string) => {
+    setLocalSim({
+      running: true,
+      stage: 1,
+      message: "Generating events...",
+      eventsGenerated: 0,
+      candidates: 0,
+      incidents: 0,
+    });
 
-  const handleRunScenario = async (scenarioId: string) => {
-    const scenario = scenarios.find((s) => s.id === scenarioId);
-    if (!scenario) return;
+    await new Promise((r) => setTimeout(r, 800));
+    setLocalSim((s) => ({
+      ...s,
+      stage: 2,
+      message: "Events received...",
+      eventsGenerated: 20,
+    }));
 
-    setRunning(true);
-    setSelectedScenario(scenarioId);
-    setStages([]);
-    setResult(null);
+    await new Promise((r) => setTimeout(r, 700));
+    setLocalSim((s) => ({
+      ...s,
+      stage: 3,
+      message: "Correlating signals...",
+      eventsGenerated: 35,
+    }));
 
-    try {
-      const simulationResult = await runSimulation(scenario);
+    const result = await runSimulation(scenarioId);
 
-      // Update stages as they progress
-      setStages(simulationResult.stages);
-      setResult({
-        finalEventCount: simulationResult.finalEventCount,
-        candidateIncidents: simulationResult.candidateIncidents,
-        confirmedIncidents: simulationResult.confirmedIncidents,
-      });
+    await new Promise((r) => setTimeout(r, 600));
+    setLocalSim({
+      running: true,
+      stage: 4,
+      message: `${result.candidates} incident candidates detected`,
+      eventsGenerated: result.eventsGenerated,
+      candidates: result.candidates,
+      incidents: 0,
+    });
 
-      setToast({
-        message: `Simulation complete: ${simulationResult.confirmedIncidents} incidents detected`,
-        type: 'success',
-      });
-    } catch (error) {
-      setToast({
-        message: 'Simulation failed',
-        type: 'success',
-      });
-    } finally {
-      setRunning(false);
-    }
-  };
+    await new Promise((r) => setTimeout(r, 700));
+    setLocalSim({
+      running: false,
+      stage: 5,
+      message:
+        result.incidentsIdentified > 0
+          ? `${result.incidentsIdentified} meaningful incidents identified`
+          : "No coherent incidents formed from noise",
+      eventsGenerated: result.eventsGenerated,
+      candidates: result.candidates,
+      incidents: result.incidentsIdentified,
+    });
 
-  if (loading) {
-    return (
-      <Layout title="Production Simulation">
-        <LoadingState />
-      </Layout>
+    addToast(
+      result.incidentsIdentified > 0
+        ? `Scenario complete — ${result.incidentsIdentified} incidents created`
+        : "Noise generation complete — no incidents correlated",
+      "success"
     );
-  }
+  };
 
   return (
-    <Layout
-      title="Production Simulation"
-      subtitle="Generate realistic operational events and watch Incident Radar correlate them into incidents."
-    >
-      <div className="space-y-8">
-        {/* Scenario Cards */}
+    <AppShell title="Production Simulation">
+      <div className="space-y-6 max-w-5xl">
         <div>
-          <h2 className="text-lg font-semibold text-slate-100 mb-4">Scenarios</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {scenarios.map((scenario) => (
+          <h2 className="text-xl font-semibold text-zinc-50">
+            Production Simulation
+          </h2>
+          <p className="text-sm text-zinc-500 mt-1">
+            Generate realistic operational events and watch Incident Radar
+            correlate them into incidents.
+          </p>
+        </div>
+
+        {(localSim.running || localSim.stage > 0) && (
+          <SimulationProgress state={localSim} />
+        )}
+
+        {loading ? (
+          <div className="grid sm:grid-cols-2 gap-4">
+            <CardSkeleton />
+            <CardSkeleton />
+          </div>
+        ) : (
+          <div className="grid sm:grid-cols-2 gap-4">
+            {scenarios.map((s) => (
               <SimulationCard
-                key={scenario.id}
-                scenario={scenario}
-                onRun={handleRunScenario}
-                isRunning={running && selectedScenario === scenario.id}
+                key={s.id}
+                scenario={s}
+                onRun={handleRun}
+                running={localSim.running}
               />
             ))}
           </div>
-        </div>
-
-        {/* Simulation Progress */}
-        {(running || result) && (
-          <div className="space-y-4">
-            <h2 className="text-lg font-semibold text-slate-100">Simulation Results</h2>
-            {result && (
-              <SimulationProgress
-                stages={stages}
-                finalEventCount={result.finalEventCount}
-                candidateIncidents={result.candidateIncidents}
-                confirmedIncidents={result.confirmedIncidents}
-              />
-            )}
-            {running && stages.length === 0 && (
-              <Card>
-                <div className="flex items-center justify-center p-8">
-                  <div className="text-center">
-                    <div className="w-8 h-8 border-2 border-slate-600 border-t-blue-500 rounded-full animate-spin mx-auto mb-4" />
-                    <p className="text-slate-400">Starting simulation...</p>
-                  </div>
-                </div>
-              </Card>
-            )}
-          </div>
         )}
-
-        {/* Information Card */}
-        <Card className="bg-blue-950/20 border-blue-700">
-          <div className="space-y-3">
-            <h3 className="font-semibold text-blue-300">About Simulations</h3>
-            <p className="text-sm text-blue-200">
-              Simulations generate synthetic operational events to demonstrate how Incident Radar
-              correlates noisy signals into meaningful incidents. Each scenario creates realistic
-              event cascades with various severity levels.
-            </p>
-            <ul className="text-sm text-blue-200 space-y-2">
-              <li>
-                <span className="font-medium">Payment Service Degradation:</span> Deployment triggers
-                connection exhaustion and cascading failures
-              </li>
-              <li>
-                <span className="font-medium">Database Failure:</span> Database CPU spike causes query
-                timeouts and checkout failures
-              </li>
-              <li>
-                <span className="font-medium">Memory Leak:</span> Memory growth leads to pod restarts
-                and request failures
-              </li>
-              <li>
-                <span className="font-medium">Noisy Environment:</span> Random low-severity alerts
-                across the system
-              </li>
-            </ul>
-          </div>
-        </Card>
       </div>
-
-      {/* Toast */}
-      {toast && (
-        <Toast
-          message={toast.message}
-          type={toast.type}
-          onClose={() => setToast(null)}
-        />
-      )}
-    </Layout>
+    </AppShell>
   );
 }

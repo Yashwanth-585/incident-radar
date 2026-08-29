@@ -1,64 +1,51 @@
-import React from 'react';
-import { Evidence } from '@/types';
+import {
+  Rocket,
+  Database,
+  Activity,
+  AlertTriangle,
+  CreditCard,
+  Circle,
+} from "lucide-react";
+import type { TimelineItem } from "@/types";
 
-interface IncidentTimelineProps {
-  evidence: Evidence[];
-}
+const iconMap: Record<string, React.ElementType> = {
+  rocket: Rocket,
+  database: Database,
+  activity: Activity,
+  alert: AlertTriangle,
+  "credit-card": CreditCard,
+};
 
-export function IncidentTimeline({ evidence }: IncidentTimelineProps) {
-  const sortedEvidence = [...evidence].sort(
-    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-  );
-
-  const getIcon = (index: number, total: number) => {
-    const icons = ['🚀', '🗄️', '📈', '💥', '💳', '⚠️', '🔥'];
-    return icons[index % icons.length];
-  };
-
+export function IncidentTimeline({ items }: { items: TimelineItem[] }) {
   return (
-    <div className="space-y-0">
-      {sortedEvidence.map((item, index) => (
-        <div key={item.id} className="relative">
-          {/* Timeline item */}
-          <div className="flex gap-4 pb-8">
-            {/* Timeline line and dot */}
-            <div className="relative flex flex-col items-center">
-              {/* Dot */}
-              <div className="w-10 h-10 rounded-full bg-slate-800 border-2 border-blue-600 flex items-center justify-center text-lg z-10 relative">
-                {getIcon(index, sortedEvidence.length)}
-              </div>
-
-              {/* Connecting line */}
-              {index < sortedEvidence.length - 1 && (
-                <div className="absolute top-10 left-5 w-0.5 h-12 bg-gradient-to-b from-blue-600/50 to-slate-700" />
-              )}
+    <div className="relative">
+      {items.map((item, idx) => {
+        const Icon = iconMap[item.icon] || Circle;
+        const isLast = idx === items.length - 1;
+        return (
+          <div key={idx} className="relative flex gap-4 pb-7 last:pb-0">
+            {!isLast && (
+              <div className="absolute left-[15px] top-8 bottom-0 w-px bg-gradient-to-b from-zinc-700 to-zinc-800" />
+            )}
+            <div className="relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-zinc-700 bg-[#0c0c0e] text-zinc-400">
+              <Icon className="h-3.5 w-3.5" />
             </div>
-
-            {/* Content */}
-            <div className="flex-1 pt-1">
-              <div className="flex items-start justify-between mb-2">
-                <div>
-                  <h4 className="font-semibold text-slate-100">{item.title}</h4>
-                  <p className="text-sm text-slate-400 mt-1">{item.description}</p>
-                </div>
+            <div className="pt-1.5 min-w-0">
+              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+                <span className="text-[11px] font-mono text-zinc-500 tabular">
+                  {item.time}
+                </span>
+                <span className="text-[13px] font-medium text-zinc-100">
+                  {item.title}
+                </span>
               </div>
-
-              {/* Metric */}
-              {item.metric && (
-                <div className="bg-slate-800/50 rounded p-3 mb-2 text-sm">
-                  <span className="text-slate-400">{item.metric.before}</span>
-                  <span className="text-slate-600 mx-2">→</span>
-                  <span className="text-slate-200 font-semibold">{item.metric.after}</span>
-                </div>
-              )}
-
-              <div className="text-xs text-slate-500">
-                {new Date(item.timestamp).toLocaleTimeString()}
-              </div>
+              <p className="mt-0.5 text-[12px] text-zinc-500 font-mono">
+                {item.detail}
+              </p>
             </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

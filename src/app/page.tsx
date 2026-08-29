@@ -1,226 +1,270 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect } from 'react';
-import { Layout } from '@/components/layout';
-import { KPICard } from '@/components/common/KPICard';
-import {
-  IncidentCard,
-  SeverityBadge,
-  ConfidenceScore,
-} from '@/components/incidents';
-import { EventVolumeChart, ErrorRateChart } from '@/components/charts/Charts';
-import { Card, Button, Toast, LoadingState } from '@/components/ui/index';
-import { getIncidents, runSimulation, getScenarios } from '@/lib/api';
-import { Incident, Scenario } from '@/types/index';
-import { Activity, AlertTriangle, TrendingDown, Zap } from 'lucide-react';
+import { useEffect, useState } from "react";
+import { AppShell } from "@/components/layout/AppShell";
+import { IncidentCard } from "@/components/incidents/IncidentCard";
+import { EventVolumeChart } from "@/components/charts/EventVolumeChart";
+import { ErrorRateChart } from "@/components/charts/ErrorRateChart";
+import { SimulationProgress } from "@/components/simulation/SimulationProgress";
+import { Button } from "@/components/ui/Button";
+import { getIncidents } from "@/lib/api";
+import type { Incident } from "@/types";
+import { useApp } from "@/context/AppContext";
+import { Play, ArrowRight } from "lucide-react";
+import { KPISkeleton } from "@/components/ui/LoadingState";
 
-export default function Overview() {
+export default function OverviewPage() {
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [loading, setLoading] = useState(true);
-  const [simulating, setSimulating] = useState(false);
-  const [toast, setToast] = useState<{ message: string; type: 'info' | 'success' | 'error' } | null>(null);
-  const [simulationStages, setSimulationStages] = useState<string[]>([]);
+  const { runMainSimulation, simulation, eventCount, simulationComplete } =
+    useApp();
 
   useEffect(() => {
-    loadIncidents();
+    getIncidents().then((data) => {
+      setIncidents(data);
+      setLoading(false);
+    });
   }, []);
 
-  const loadIncidents = async () => {
-    setLoading(true);
-    try {
-      const data = await getIncidents();
-      setIncidents(data);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const critical = incidents.find((i) => i.id === "INC-001");
+  const others = incidents
+    .filter((i) => i.id !== "INC-001" && i.status === "active")
+    .slice(0, 3);
 
-  const handleRunSimulation = async () => {
-    setSimulating(true);
-    setSimulationStages([]);
-
-    try {
-      const scenarios = await getScenarios();
-      const result = await runSimulation(scenarios[0]);
-
-      // Simulate stage progression
-      for (const stage of result.stages) {
-        setSimulationStages((prev) => [...prev, stage.stage]);
-        await new Promise((resolve) => setTimeout(resolve, 600));
-      }
-
-      setToast({
-        message: `Simulation complete: ${result.finalEventCount} events, ${result.confirmedIncidents} incidents created`,
-        type: 'success',
-      });
-
-      // Reload incidents to show simulation results
-      await loadIncidents();
-    } catch (error) {
-      setToast({
-        message: 'Simulation failed',
-        type: 'error',
-      });
-    } finally {
-      setSimulating(false);
-      setTimeout(() => setSimulationStages([]), 2000);
-    }
-  };
-
-  const handleAction = (action: string) => {
-    setToast({
-      message: `${action} request queued — backend integration coming soon.`,
-      type: 'info',
-    });
-  };
-
-  if (loading) {
-    return (
-      <Layout title="Incident Overview">
-        <LoadingState />
-      </Layout>
-    );
-  }
-
-  const criticalIncident = incidents.find((i) => i.severity === 'critical');
-  const otherIncidents = incidents.filter((i) => i.severity !== 'critical');
   const severityCounts = {
-    critical: incidents.filter((i) => i.severity === 'critical').length,
-    high: incidents.filter((i) => i.severity === 'high').length,
-    medium: incidents.filter((i) => i.severity === 'medium').length,
-    low: incidents.filter((i) => i.severity === 'low').length,
+    critical: incidents.filter((i) => i.severity === "critical").length,
+    high: incidents.filter((i) => i.severity === "high").length,
+    medium: incidents.filter((i) => i.severity === "medium").length,
+    low: incidents.filter((i) => i.severity === "low").length,
   };
-
-  const eventCount = 187;
-  const correlationRate = 94.6;
-  const meanDetectionTime = '42 sec';
 
   return (
-    <Layout
-      title="Incident Overview"
-      subtitle="Real-time operational intelligence across your production environment."
-    >
-      <div className="space-y-8">
-        {/* KPI Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <KPICard label="Events" value={eventCount} icon={Activity} />
-          <KPICard label="Active Incidents" value={incidents.length} icon={AlertTriangle} />
-          <KPICard
-            label="Correlated"
-            value={`${correlationRate}%`}
-            icon={TrendingDown}
-          />
-          <KPICard label="Mean Detection Time" value={meanDetectionTime} icon={Zap} />
+    <AppShell title="Overview">
+      <div className="space-y-6 max-w-6xl fade-up">
+        {/* Page header */}
+        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold tracking-tight text-zinc-50">
+              Operational pulse
+            </h2>
+            <p className="text-[13px] text-zinc-500 mt-1 max-w-md">
+              Noisy signals correlated into prioritized incidents — what needs
+              attention right now.
+            </p>
+          </div>
+          <Button
+            onClick={runMainSimulation}
+            disabled={simulation.running}
+            size="md"
+          >
+            <Play className="h-3.5 w-3.5" />
+            Run production simulation
+          </Button>
         </div>
 
-        {/* Severity Summary */}
-        <Card>
-          <div className="space-y-4">
-            <h3 className="font-semibold text-slate-100">Severity Summary</h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="flex items-center gap-2">
-                <span className="text-lg">🔴</span>
-                <div>
-                  <p className="text-xs text-slate-500">Critical</p>
-                  <p className="text-lg font-semibold text-red-400">{severityCounts.critical}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-lg">🟠</span>
-                <div>
-                  <p className="text-xs text-slate-500">High</p>
-                  <p className="text-lg font-semibold text-orange-400">{severityCounts.high}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-lg">🟡</span>
-                <div>
-                  <p className="text-xs text-slate-500">Medium</p>
-                  <p className="text-lg font-semibold text-yellow-400">{severityCounts.medium}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-lg">🟢</span>
-                <div>
-                  <p className="text-xs text-slate-500">Low</p>
-                  <p className="text-lg font-semibold text-green-400">{severityCounts.low}</p>
-                </div>
-              </div>
-            </div>
+        {/* Product story pipeline */}
+        <div className="rounded-lg border border-[#27272a] bg-[#121216] px-4 py-3 overflow-x-auto">
+          <div className="flex items-center gap-2 text-[11px] font-medium min-w-max">
+            <PipelineStep
+              label={`${eventCount} events`}
+              active={eventCount > 0}
+            />
+            <ArrowRight className="h-3 w-3 text-zinc-700 shrink-0" />
+            <PipelineStep
+              label={
+                simulation.candidates
+                  ? `${simulation.candidates} candidates`
+                  : "correlation"
+              }
+              active={!!simulation.candidates || simulationComplete}
+            />
+            <ArrowRight className="h-3 w-3 text-zinc-700 shrink-0" />
+            <PipelineStep
+              label={
+                simulationComplete
+                  ? "6 incidents"
+                  : simulation.incidents
+                  ? `${simulation.incidents} incidents`
+                  : "incidents"
+              }
+              active={simulationComplete || simulation.incidents > 0}
+            />
+            <ArrowRight className="h-3 w-3 text-zinc-700 shrink-0" />
+            <PipelineStep
+              label="critical"
+              active={simulationComplete}
+              critical
+            />
+            <ArrowRight className="h-3 w-3 text-zinc-700 shrink-0" />
+            <PipelineStep
+              label="evidence → action"
+              active={simulationComplete}
+              ai
+            />
           </div>
-        </Card>
-
-        {/* Simulation Prompt */}
-        {!simulating && simulationStages.length === 0 && (
-          <Card className="border-blue-600/50 bg-blue-950/30">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-semibold text-slate-100 mb-1">Run Production Simulation</h3>
-                <p className="text-sm text-slate-400">
-                  Generate realistic operational events and watch Incident Radar correlate them into incidents.
-                </p>
-              </div>
-              <Button variant="primary" onClick={handleRunSimulation}>
-                ▶ Run Simulation
-              </Button>
-            </div>
-          </Card>
-        )}
-
-        {/* Simulation Progress */}
-        {(simulating || simulationStages.length > 0) && (
-          <Card className="bg-blue-950/20 border-blue-600/50">
-            <div className="space-y-3">
-              {simulationStages.map((stage, idx) => (
-                <div key={idx} className="text-sm text-slate-300">
-                  ✓ {stage}
-                </div>
-              ))}
-              {simulating && (
-                <div className="flex items-center gap-2 text-slate-400 text-sm">
-                  <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-                  Running simulation...
-                </div>
-              )}
-            </div>
-          </Card>
-        )}
-
-        {/* Critical Incident */}
-        {criticalIncident && (
-          <div className="space-y-4">
-            <h2 className="text-lg font-semibold text-slate-100">🔴 Critical Incident</h2>
-            <IncidentCard incident={criticalIncident} highlighted={true} />
-          </div>
-        )}
-
-        {/* Charts */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <EventVolumeChart />
-          <ErrorRateChart />
         </div>
 
-        {/* Other Incidents */}
-        {otherIncidents.length > 0 && (
-          <div className="space-y-4">
-            <h2 className="text-lg font-semibold text-slate-100">Active Incidents</h2>
-            <div className="grid grid-cols-1 gap-4">
-              {otherIncidents.map((incident) => (
-                <IncidentCard key={incident.id} incident={incident} />
+        {(simulation.running || simulation.stage > 0) && (
+          <SimulationProgress state={simulation} />
+        )}
+
+        {/* KPIs */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {loading ? (
+            <>
+              <KPISkeleton />
+              <KPISkeleton />
+              <KPISkeleton />
+              <KPISkeleton />
+            </>
+          ) : (
+            <>
+              <KPICard label="Events ingested" value={eventCount} />
+              <KPICard
+                label="Active incidents"
+                value={
+                  simulationComplete
+                    ? 6
+                    : Math.max(0, simulation.incidents)
+                }
+              />
+              <KPICard label="Correlated" value="94.6%" hint="of signals" />
+              <KPICard label="Mean detect" value="42s" hint="last 24h" />
+            </>
+          )}
+        </div>
+
+        {/* Severity strip */}
+        <div className="flex flex-wrap items-center gap-5 text-[12px]">
+          <SeverityPill color="bg-red-500" label="Critical" count={severityCounts.critical} />
+          <SeverityPill color="bg-orange-500" label="High" count={severityCounts.high} />
+          <SeverityPill color="bg-yellow-500" label="Medium" count={severityCounts.medium} />
+          <SeverityPill color="bg-emerald-500" label="Low" count={severityCounts.low} />
+        </div>
+
+        {/* Critical incident */}
+        {critical && simulationComplete && (
+          <div>
+            <div className="flex items-center gap-2 mb-2.5">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-red-400/80">
+                Requires attention
+              </span>
+              <div className="flex-1 h-px bg-gradient-to-r from-red-500/20 to-transparent" />
+            </div>
+            <IncidentCard incident={critical} featured />
+          </div>
+        )}
+
+        {!simulationComplete && simulation.stage >= 6 && (
+          <div className="rounded-lg border border-red-500/20 bg-red-950/20 px-4 py-3">
+            <p className="text-[13px] text-red-300/90 font-medium">
+              Payment Service Degradation — correlating final signals…
+            </p>
+          </div>
+        )}
+
+        {simulationComplete && others.length > 0 && (
+          <div>
+            <h3 className="text-[11px] font-semibold uppercase tracking-wider text-zinc-600 mb-2.5">
+              Other active
+            </h3>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {others.map((inc) => (
+                <IncidentCard key={inc.id} incident={inc} />
               ))}
             </div>
           </div>
         )}
+
+        <div className="grid lg:grid-cols-2 gap-3">
+          <div className="rounded-lg border border-[#27272a] bg-[#121216] p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+                Event volume
+              </h3>
+              <span className="text-[10px] text-zinc-600 font-mono">06:00 → now</span>
+            </div>
+            <EventVolumeChart />
+          </div>
+          <div className="rounded-lg border border-[#27272a] bg-[#121216] p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+                Error rate
+              </h3>
+              <span className="text-[10px] text-zinc-600 font-mono">payment-api</span>
+            </div>
+            <ErrorRateChart />
+          </div>
+        </div>
       </div>
+    </AppShell>
+  );
+}
 
-      {/* Toast notifications */}
-      {toast && (
-        <Toast
-          message={toast.message}
-          type={toast.type}
-          onClose={() => setToast(null)}
-        />
+function PipelineStep({
+  label,
+  active,
+  critical,
+  ai,
+}: {
+  label: string;
+  active?: boolean;
+  critical?: boolean;
+  ai?: boolean;
+}) {
+  return (
+    <span
+      className={
+        active
+          ? critical
+            ? "rounded px-2 py-1 bg-red-500/15 text-red-400 border border-red-500/25"
+            : ai
+            ? "rounded px-2 py-1 bg-violet-500/15 text-violet-300 border border-violet-500/25"
+            : "rounded px-2 py-1 bg-zinc-800 text-zinc-200 border border-zinc-700"
+          : "rounded px-2 py-1 text-zinc-600 border border-transparent"
+      }
+    >
+      {label}
+    </span>
+  );
+}
+
+function KPICard({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string | number;
+  hint?: string;
+}) {
+  return (
+    <div className="rounded-lg border border-[#27272a] bg-[#121216] px-4 py-3.5">
+      <p className="text-[11px] text-zinc-500 font-medium">{label}</p>
+      <p className="text-[22px] font-semibold tracking-tight text-zinc-50 mt-1 tabular leading-none">
+        {value}
+      </p>
+      {hint && (
+        <p className="text-[10px] text-zinc-600 mt-1.5">{hint}</p>
       )}
-    </Layout>
+    </div>
+  );
+}
+
+function SeverityPill({
+  color,
+  label,
+  count,
+}: {
+  color: string;
+  label: string;
+  count: number;
+}) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className={`h-1.5 w-1.5 rounded-full ${color}`} />
+      <span className="text-zinc-500">{label}</span>
+      <span className="text-zinc-200 font-medium tabular">{count}</span>
+    </div>
   );
 }

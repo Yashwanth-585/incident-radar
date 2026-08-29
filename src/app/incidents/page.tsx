@@ -1,83 +1,57 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect } from 'react';
-import { Layout } from '@/components/layout';
-import { IncidentCard } from '@/components/incidents';
-import { Card, Button, LoadingState } from '@/components/ui';
-import { getIncidents } from '@/lib/api';
-import { Incident } from '@/types';
-import { Filter } from 'lucide-react';
+import { useEffect, useState } from "react";
+import { AppShell } from "@/components/layout/AppShell";
+import { IncidentCard } from "@/components/incidents/IncidentCard";
+import { getIncidents } from "@/lib/api";
+import type { Incident } from "@/types";
+import { CardSkeleton } from "@/components/ui/LoadingState";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 export default function IncidentsPage() {
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<'all' | 'critical' | 'active' | 'resolved'>('all');
 
   useEffect(() => {
-    loadIncidents();
+    getIncidents().then((data) => {
+      setIncidents(data);
+      setLoading(false);
+    });
   }, []);
 
-  const loadIncidents = async () => {
-    setLoading(true);
-    try {
-      const data = await getIncidents();
-      setIncidents(data);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const filtered = incidents.filter((incident) => {
-    if (filter === 'critical') return incident.severity === 'critical';
-    if (filter === 'active') return incident.status === 'active';
-    if (filter === 'resolved') return incident.status === 'resolved';
-    return true;
-  });
-
-  if (loading) {
-    return (
-      <Layout title="Incidents">
-        <LoadingState />
-      </Layout>
-    );
-  }
-
   return (
-    <Layout title="Incidents" subtitle="Prioritized operational incidents and alerts">
-      <div className="space-y-6">
-        {/* Filters */}
-        <Card>
-          <div className="flex items-center gap-4 flex-wrap">
-            <div className="flex items-center gap-2 text-slate-400">
-              <Filter className="w-4 h-4" />
-              <span className="text-sm font-medium">Filter:</span>
-            </div>
-            {(['all', 'critical', 'active', 'resolved'] as const).map((f) => (
-              <Button
-                key={f}
-                variant={filter === f ? 'primary' : 'ghost'}
-                onClick={() => setFilter(f)}
-                className="text-sm"
-              >
-                {f.charAt(0).toUpperCase() + f.slice(1)}
-              </Button>
-            ))}
-          </div>
-        </Card>
+    <AppShell title="Incidents">
+      <div className="space-y-6 max-w-5xl">
+        <div>
+          <h2 className="text-xl font-semibold text-zinc-50">Incidents</h2>
+          <p className="text-sm text-zinc-500 mt-1">
+            {loading ? "Loading..." : `${incidents.length} incidents`}
+          </p>
+        </div>
 
-        {/* Incident list */}
-        {filtered.length > 0 ? (
-          <div className="grid grid-cols-1 gap-4">
-            {filtered.map((incident) => (
-              <IncidentCard key={incident.id} incident={incident} />
+        {loading ? (
+          <div className="grid gap-3">
+            <CardSkeleton />
+            <CardSkeleton />
+            <CardSkeleton />
+          </div>
+        ) : incidents.length === 0 ? (
+          <EmptyState
+            title="No active incidents"
+            description="Your production environment is healthy."
+          />
+        ) : (
+          <div className="grid gap-3">
+            {incidents.map((inc) => (
+              <IncidentCard
+                key={inc.id}
+                incident={inc}
+                featured={inc.id === "INC-001"}
+              />
             ))}
           </div>
-        ) : (
-          <Card className="text-center py-12">
-            <p className="text-slate-400">No incidents match the selected filter.</p>
-          </Card>
         )}
       </div>
-    </Layout>
+    </AppShell>
   );
 }

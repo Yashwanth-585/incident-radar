@@ -1,131 +1,81 @@
-'use client';
+"use client";
 
-import React, { useState } from 'react';
-import { Event } from '@/types';
-import { Card, Badge } from '@/components/ui';
-import { ChevronUp, ChevronDown } from 'lucide-react';
+import type { Event } from "@/types";
+import { SeverityBadge } from "@/components/ui/Badge";
+import { formatTime } from "@/lib/utils";
+import Link from "next/link";
 
-interface EventTableProps {
-  events: Event[];
-  searchTerm?: string;
-  filters?: {
-    service?: string;
-    severity?: string;
-    source?: string;
-  };
-}
-
-export function EventTable({ events, searchTerm = '', filters = {} }: EventTableProps) {
-  const [sortBy, setSortBy] = useState<'time' | 'severity'>('time');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
-
-  let filtered = events.filter((event) => {
-    if (searchTerm && !event.message.toLowerCase().includes(searchTerm.toLowerCase())) {
-      return false;
-    }
-    if (filters.service && event.service !== filters.service) return false;
-    if (filters.severity && event.severity !== filters.severity) return false;
-    if (filters.source && event.source !== filters.source) return false;
-    return true;
-  });
-
-  // Sort
-  filtered.sort((a, b) => {
-    let aVal: any = a[sortBy === 'time' ? 'timestamp' : 'severity'];
-    let bVal: any = b[sortBy === 'time' ? 'timestamp' : 'severity'];
-
-    if (sortBy === 'time') {
-      aVal = new Date(aVal).getTime();
-      bVal = new Date(bVal).getTime();
-    } else if (sortBy === 'severity') {
-      const severityOrder = { critical: 0, high: 1, medium: 2, low: 3 };
-      aVal = severityOrder[aVal as any];
-      bVal = severityOrder[bVal as any];
-    }
-
-    return sortDir === 'asc' ? aVal - bVal : bVal - aVal;
-  });
-
-  const toggleSort = (column: 'time' | 'severity') => {
-    if (sortBy === column) {
-      setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortBy(column);
-      setSortDir('desc');
-    }
-  };
-
-  const SortIcon = ({ column }: { column: 'time' | 'severity' }) => {
-    if (sortBy !== column) return <div className="w-4 h-4" />;
-    return sortDir === 'asc' ? (
-      <ChevronUp className="w-4 h-4" />
-    ) : (
-      <ChevronDown className="w-4 h-4" />
+export function EventTable({ events }: { events: Event[] }) {
+  if (events.length === 0) {
+    return (
+      <div className="rounded-lg border border-[#27272a] bg-[#121216] text-center py-14 text-[13px] text-zinc-500">
+        No events match your filters.
+      </div>
     );
-  };
+  }
 
   return (
-    <Card>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-slate-700">
-              <th className="px-4 py-3 text-left font-medium text-slate-400">
-                <button
-                  onClick={() => toggleSort('time')}
-                  className="flex items-center gap-2 hover:text-slate-300"
-                >
-                  Timestamp
-                  <SortIcon column="time" />
-                </button>
-              </th>
-              <th className="px-4 py-3 text-left font-medium text-slate-400">Service</th>
-              <th className="px-4 py-3 text-left font-medium text-slate-400">Source</th>
-              <th className="px-4 py-3 text-left font-medium text-slate-400">Event</th>
-              <th className="px-4 py-3 text-left font-medium text-slate-400">
-                <button
-                  onClick={() => toggleSort('severity')}
-                  className="flex items-center gap-2 hover:text-slate-300"
-                >
-                  Severity
-                  <SortIcon column="severity" />
-                </button>
-              </th>
-              <th className="px-4 py-3 text-left font-medium text-slate-400">Incident</th>
+    <div className="overflow-x-auto rounded-lg border border-[#27272a]">
+      <table className="w-full text-[13px]">
+        <thead>
+          <tr className="border-b border-[#1f1f24] bg-[#121216] text-left">
+            <th className="px-3.5 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-600">
+              Time
+            </th>
+            <th className="px-3.5 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-600">
+              Service
+            </th>
+            <th className="px-3.5 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-600">
+              Source
+            </th>
+            <th className="px-3.5 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-600">
+              Event
+            </th>
+            <th className="px-3.5 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-600">
+              Severity
+            </th>
+            <th className="px-3.5 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-600">
+              Incident
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {events.map((e) => (
+            <tr
+              key={e.id}
+              className="border-b border-[#1f1f24]/80 hover:bg-zinc-900/40 transition-colors"
+            >
+              <td className="px-3.5 py-2 font-mono text-[11px] text-zinc-500 whitespace-nowrap tabular">
+                {formatTime(e.timestamp)}
+              </td>
+              <td className="px-3.5 py-2 text-zinc-300 whitespace-nowrap text-[12px]">
+                {e.service}
+              </td>
+              <td className="px-3.5 py-2 text-zinc-500 whitespace-nowrap text-[12px]">
+                {e.source}
+              </td>
+              <td className="px-3.5 py-2 text-zinc-200 max-w-[280px] truncate text-[12px]">
+                {e.message}
+              </td>
+              <td className="px-3.5 py-2">
+                <SeverityBadge severity={e.severity} />
+              </td>
+              <td className="px-3.5 py-2">
+                {e.incidentId ? (
+                  <Link
+                    href={`/incidents/${e.incidentId}`}
+                    className="text-[11px] text-blue-400 hover:text-blue-300 font-mono"
+                  >
+                    {e.incidentId}
+                  </Link>
+                ) : (
+                  <span className="text-[11px] text-zinc-700">—</span>
+                )}
+              </td>
             </tr>
-          </thead>
-          <tbody>
-            {filtered.slice(0, 30).map((event) => (
-              <tr
-                key={event.id}
-                className="border-b border-slate-800 hover:bg-slate-800/30 transition-colors"
-              >
-                <td className="px-4 py-3 text-slate-300 font-mono text-xs">
-                  {new Date(event.timestamp).toLocaleTimeString()}
-                </td>
-                <td className="px-4 py-3 text-slate-300">{event.service}</td>
-                <td className="px-4 py-3 text-slate-400">{event.source}</td>
-                <td className="px-4 py-3 text-slate-300 max-w-xs truncate">{event.message}</td>
-                <td className="px-4 py-3">
-                  <Badge severity={event.severity}>
-                    {event.severity.charAt(0).toUpperCase() + event.severity.slice(1)}
-                  </Badge>
-                </td>
-                <td className="px-4 py-3 text-slate-400">
-                  {event.incidentId ? (
-                    <Badge severity="info">{event.incidentId}</Badge>
-                  ) : (
-                    <span className="text-slate-600">—</span>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <div className="px-4 py-3 border-t border-slate-700 text-xs text-slate-400">
-        Showing {Math.min(30, filtered.length)} of {filtered.length} events
-      </div>
-    </Card>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }

@@ -1,202 +1,144 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect } from 'react';
-import Link from 'next/link';
-import { useParams } from 'next/navigation';
-import { Layout } from '@/components/layout';
-import {
-  SeverityBadge,
-  ConfidenceScore,
-  EvidenceCard,
-  IncidentTimeline,
-  RecommendationCard,
-} from '@/components/incidents';
-import { EventTable } from '@/components/events';
-import { Card, Button, LoadingState, Toast, Badge } from '@/components/ui';
-import { getIncident, getEvents } from '@/lib/api';
-import { Incident, Event } from '@/types';
-import { ChevronLeft, AlertCircle } from 'lucide-react';
+import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
+import Link from "next/link";
+import { AppShell } from "@/components/layout/AppShell";
+import { SeverityBadge, Badge } from "@/components/ui/Badge";
+import { ConfidenceScore } from "@/components/incidents/ConfidenceScore";
+import { EvidenceCard } from "@/components/incidents/EvidenceCard";
+import { IncidentTimeline } from "@/components/incidents/IncidentTimeline";
+import { RecommendationCard } from "@/components/incidents/RecommendationCard";
+import { EventTable } from "@/components/events/EventTable";
+import { getIncident, getEventsByIncident } from "@/lib/api";
+import type { Incident, Event } from "@/types";
+import { ArrowLeft } from "lucide-react";
+import { CardSkeleton } from "@/components/ui/LoadingState";
 
 export default function IncidentDetailPage() {
   const params = useParams();
-  const incidentId = params.id as string;
-
+  const id = params.id as string;
   const [incident, setIncident] = useState<Incident | null>(null);
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
 
   useEffect(() => {
-    loadData();
-  }, [incidentId]);
-
-  const loadData = async () => {
-    setLoading(true);
-    try {
-      const [incidentData, eventsData] = await Promise.all([
-        getIncident(incidentId),
-        getEvents(),
-      ]);
-
-      if (incidentData) {
-        setIncident(incidentData);
-        setEvents(
-          eventsData.filter((e) => incidentData.eventIds.includes(e.id))
-        );
+    Promise.all([getIncident(id), getEventsByIncident(id)]).then(
+      ([inc, evts]) => {
+        setIncident(inc);
+        setEvents(evts);
+        setLoading(false);
       }
-    } finally {
-      setLoading(false);
-    }
-  };
+    );
+  }, [id]);
 
-  const handleAction = (id: string, action: string) => {
-    setToast({
-      message: `${action === 'execute' ? 'Rollback' : 'Ticket'} request queued — backend integration coming soon.`,
-      type: 'info',
-    });
-  };
-
-  if (loading || !incident) {
+  if (loading) {
     return (
-      <Layout title="Incident Investigation">
-        <LoadingState />
-      </Layout>
+      <AppShell title="Investigation">
+        <div className="space-y-4 max-w-4xl">
+          <CardSkeleton lines={4} />
+          <CardSkeleton lines={6} />
+        </div>
+      </AppShell>
+    );
+  }
+
+  if (!incident) {
+    return (
+      <AppShell title="Investigation">
+        <div className="text-center py-16">
+          <p className="text-zinc-400 text-[13px]">Incident not found.</p>
+          <Link
+            href="/incidents"
+            className="text-[13px] text-blue-400 hover:text-blue-300 mt-2 inline-block"
+          >
+            Back to incidents
+          </Link>
+        </div>
+      </AppShell>
     );
   }
 
   return (
-    <Layout title="Incident Investigation">
-      <div className="space-y-8">
-        {/* Back button and header */}
-        <div className="space-y-4">
-          <Link
-            href="/incidents"
-            className="flex items-center gap-2 text-blue-400 hover:text-blue-300 transition-colors"
-          >
-            <ChevronLeft className="w-4 h-4" />
-            Back to Incidents
-          </Link>
+    <AppShell title={incident.title}>
+      <div className="space-y-6 max-w-4xl fade-up">
+        <Link
+          href="/incidents"
+          className="inline-flex items-center gap-1.5 text-[12px] text-zinc-500 hover:text-zinc-300 transition-colors"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          Incidents
+        </Link>
 
-          <div className="space-y-4">
-            <h1 className="text-3xl font-bold text-slate-100">{incident.title}</h1>
-
-            <div className="flex flex-wrap items-center gap-3">
-              <SeverityBadge severity={incident.severity} />
-              <Badge severity="info">{incident.id}</Badge>
-              <Badge severity="info">
-                {incident.status.charAt(0).toUpperCase() + incident.status.slice(1)}
-              </Badge>
-              <Badge severity="info">{incident.confidence}% Confidence</Badge>
-            </div>
+        <div>
+          <div className="flex flex-wrap items-center gap-1.5 mb-2.5">
+            <SeverityBadge severity={incident.severity} />
+            <Badge variant="mono">{incident.id}</Badge>
+            <Badge variant="status">{incident.status}</Badge>
+            <Badge variant="ai">{incident.confidence}% confidence</Badge>
           </div>
+          <h1 className="text-xl font-semibold tracking-tight text-zinc-50">
+            {incident.title}
+          </h1>
+          <p className="text-[13px] text-zinc-400 mt-2 max-w-2xl leading-relaxed">
+            {incident.description}
+          </p>
         </div>
-
-        {/* Description */}
-        <Card>
-          <div className="space-y-3">
-            <h3 className="font-semibold text-slate-100">Description</h3>
-            <p className="text-slate-300">{incident.description}</p>
-
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t border-slate-700">
-              <div>
-                <p className="text-xs text-slate-500">Service</p>
-                <p className="text-sm font-medium text-slate-200">{incident.service}</p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-500">Started</p>
-                <p className="text-sm font-medium text-slate-200">
-                  {new Date(incident.startTime).toLocaleTimeString()}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-500">Correlated Events</p>
-                <p className="text-sm font-medium text-slate-200">{incident.correlatedEventCount}</p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-500">Affected Services</p>
-                <p className="text-sm font-medium text-slate-200">
-                  {incident.correlatedServices.length}
-                </p>
-              </div>
-            </div>
-          </div>
-        </Card>
 
         {/* AI Investigation */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2">
-            <Card elevated>
-              <div className="space-y-6">
-                <div>
-                  <h3 className="font-semibold text-slate-100 mb-4">AI Investigation</h3>
-
-                  <div className="bg-slate-800/30 rounded p-4 border border-slate-700 space-y-3">
-                    <div className="flex items-start gap-3">
-                      <AlertCircle className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
-                      <div>
-                        <p className="font-medium text-slate-100 mb-2">Likely Root Cause</p>
-                        <p className="text-slate-300 text-sm">{incident.rootCause}</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </Card>
+        <div className="rounded-lg border border-violet-500/20 bg-gradient-to-br from-violet-950/30 via-[#121216] to-[#121216] overflow-hidden">
+          <div className="px-4 py-2.5 border-b border-violet-500/10 flex items-center gap-2">
+            <span className="h-1.5 w-1.5 rounded-full bg-violet-400" />
+            <h3 className="text-[11px] font-semibold uppercase tracking-wider text-violet-300/90">
+              AI Investigation
+            </h3>
           </div>
+          <div className="p-5 flex flex-col sm:flex-row gap-6 items-start">
+            <ConfidenceScore value={incident.confidence} />
+            <div className="flex-1 pt-1">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 mb-1.5">
+                Likely root cause
+              </p>
+              <p className="text-[14px] text-zinc-200 leading-relaxed">
+                {incident.rootCause}
+              </p>
+            </div>
+          </div>
+        </div>
 
+        {incident.evidence.length > 0 && (
           <div>
-            <ConfidenceScore confidence={incident.confidence} />
+            <h3 className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 mb-3">
+              Evidence chain
+            </h3>
+            <div className="grid sm:grid-cols-2 gap-2.5">
+              {incident.evidence.map((ev, i) => (
+                <EvidenceCard key={ev.id} evidence={ev} step={i + 1} />
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* Evidence */}
-        <div className="space-y-4">
-          <h2 className="text-xl font-semibold text-slate-100">Evidence</h2>
-          <div className="space-y-3">
-            {incident.evidence.map((evidence) => (
-              <EvidenceCard key={evidence.id} evidence={evidence} />
-            ))}
+        {incident.timeline.length > 0 && (
+          <div className="rounded-lg border border-[#27272a] bg-[#121216] p-5">
+            <h3 className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 mb-5">
+              Causal timeline
+            </h3>
+            <IncidentTimeline items={incident.timeline} />
           </div>
-        </div>
+        )}
 
-        {/* Timeline */}
-        <div className="space-y-4">
-          <h2 className="text-xl font-semibold text-slate-100">Timeline</h2>
-          <Card>
-            <IncidentTimeline evidence={incident.evidence} />
-          </Card>
-        </div>
+        {incident.recommendations.length > 0 && (
+          <RecommendationCard recommendations={incident.recommendations} />
+        )}
 
-        {/* Recommendations */}
-        <div className="space-y-4">
-          <h2 className="text-xl font-semibold text-slate-100">Recommended Actions</h2>
-          <div className="space-y-3">
-            {incident.recommendations.map((rec, idx) => (
-              <RecommendationCard
-                key={rec.id}
-                recommendation={rec}
-                isPrimary={idx === 0}
-                onAction={handleAction}
-              />
-            ))}
-          </div>
-        </div>
-
-        {/* Correlated Events */}
-        <div className="space-y-4">
-          <h2 className="text-xl font-semibold text-slate-100">Correlated Events</h2>
+        <div>
+          <h3 className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 mb-3">
+            Correlated events · {events.length}
+          </h3>
           <EventTable events={events} />
         </div>
       </div>
-
-      {/* Toast */}
-      {toast && (
-        <Toast
-          message={toast.message}
-          type={toast.type}
-          onClose={() => setToast(null)}
-        />
-      )}
-    </Layout>
+    </AppShell>
   );
 }

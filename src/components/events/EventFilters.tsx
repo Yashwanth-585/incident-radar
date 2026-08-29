@@ -1,135 +1,76 @@
-'use client';
+"use client";
 
-import React from 'react';
-import { Card, Button } from '@/components/ui';
-import { Search, X } from 'lucide-react';
+import { Search } from "lucide-react";
 
-interface EventFiltersProps {
-  onSearch: (term: string) => void;
-  onFilterChange: (filters: { service?: string; severity?: string; source?: string }) => void;
-  onReset: () => void;
+interface Filters {
+  search: string;
+  service: string;
+  source: string;
+  severity: string;
 }
 
-export function EventFilters({ onSearch, onFilterChange, onReset }: EventFiltersProps) {
-  const [searchTerm, setSearchTerm] = React.useState('');
-  const [service, setService] = React.useState('');
-  const [severity, setSeverity] = React.useState('');
-  const [source, setSource] = React.useState('');
-
-  const handleSearchChange = (value: string) => {
-    setSearchTerm(value);
-    onSearch(value);
-  };
-
-  const handleFilterChange = () => {
-    onFilterChange({ service, severity, source });
-  };
-
-  const handleReset = () => {
-    setSearchTerm('');
-    setService('');
-    setSeverity('');
-    setSource('');
-    onReset();
-  };
-
-  React.useEffect(() => {
-    handleFilterChange();
-  }, [service, severity, source]);
-
-  const services = [
-    'payment-api',
-    'authentication-api',
-    'checkout-api',
-    'api-gateway',
-    'postgres-primary',
-    'redis',
-    'notification-service',
-  ];
-
-  const severities = ['critical', 'high', 'medium', 'low'];
-  const sources = ['GitHub', 'AWS', 'Datadog', 'PostgreSQL', 'Application Logs', 'Kubernetes', 'Payments'];
-
+export function EventFilters({
+  filters,
+  onChange,
+  services,
+  sources,
+}: {
+  filters: Filters;
+  onChange: (f: Filters) => void;
+  services: string[];
+  sources: string[];
+}) {
   return (
-    <Card className="space-y-4">
-      {/* Search */}
-      <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-800 border border-slate-700">
-        <Search className="w-4 h-4 text-slate-400" />
+    <div className="flex flex-wrap gap-2 items-center">
+      <div className="flex items-center gap-2 rounded-md border border-zinc-800 bg-zinc-900/50 px-3 py-1.5 flex-1 min-w-[180px] max-w-xs">
+        <Search className="h-3.5 w-3.5 text-zinc-500 shrink-0" />
         <input
           type="text"
           placeholder="Search events..."
-          value={searchTerm}
-          onChange={(e) => handleSearchChange(e.target.value)}
-          className="bg-transparent text-sm text-slate-300 placeholder-slate-500 outline-none flex-1"
+          value={filters.search}
+          onChange={(e) => onChange({ ...filters, search: e.target.value })}
+          className="bg-transparent text-sm text-zinc-300 placeholder:text-zinc-600 outline-none w-full"
         />
-        {searchTerm && (
-          <button
-            onClick={() => handleSearchChange('')}
-            className="p-1 hover:bg-slate-700 rounded transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        )}
       </div>
 
-      {/* Filters */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div>
-          <label className="text-xs text-slate-400 block mb-2">Service</label>
-          <select
-            value={service}
-            onChange={(e) => setService(e.target.value)}
-            className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-sm text-slate-300 outline-none"
-          >
-            <option value="">All Services</option>
-            {services.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-        </div>
+      <select
+        value={filters.service}
+        onChange={(e) => onChange({ ...filters, service: e.target.value })}
+        className="rounded-md border border-zinc-800 bg-zinc-900 text-sm text-zinc-300 px-2.5 py-1.5 outline-none focus:border-zinc-600"
+      >
+        <option value="all">All services</option>
+        {services.map((s) => (
+          <option key={s} value={s}>
+            {s}
+          </option>
+        ))}
+      </select>
 
-        <div>
-          <label className="text-xs text-slate-400 block mb-2">Severity</label>
-          <select
-            value={severity}
-            onChange={(e) => setSeverity(e.target.value)}
-            className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-sm text-slate-300 outline-none"
-          >
-            <option value="">All Severities</option>
-            {severities.map((s) => (
-              <option key={s} value={s}>
-                {s.charAt(0).toUpperCase() + s.slice(1)}
-              </option>
-            ))}
-          </select>
-        </div>
+      <select
+        value={filters.source}
+        onChange={(e) => onChange({ ...filters, source: e.target.value })}
+        className="rounded-md border border-zinc-800 bg-zinc-900 text-sm text-zinc-300 px-2.5 py-1.5 outline-none focus:border-zinc-600"
+      >
+        <option value="all">All sources</option>
+        {sources.map((s) => (
+          <option key={s} value={s}>
+            {s}
+          </option>
+        ))}
+      </select>
 
-        <div>
-          <label className="text-xs text-slate-400 block mb-2">Source</label>
-          <select
-            value={source}
-            onChange={(e) => setSource(e.target.value)}
-            className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-sm text-slate-300 outline-none"
-          >
-            <option value="">All Sources</option>
-            {sources.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {/* Reset button */}
-      {(searchTerm || service || severity || source) && (
-        <Button variant="ghost" onClick={handleReset} className="w-full">
-          <X className="w-4 h-4 mr-2" />
-          Reset Filters
-        </Button>
-      )}
-    </Card>
+      <select
+        value={filters.severity}
+        onChange={(e) => onChange({ ...filters, severity: e.target.value })}
+        className="rounded-md border border-zinc-800 bg-zinc-900 text-sm text-zinc-300 px-2.5 py-1.5 outline-none focus:border-zinc-600"
+      >
+        <option value="all">All severities</option>
+        <option value="critical">Critical</option>
+        <option value="high">High</option>
+        <option value="medium">Medium</option>
+        <option value="low">Low</option>
+        <option value="info">Info</option>
+      </select>
+    </div>
   );
 }

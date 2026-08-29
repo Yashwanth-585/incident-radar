@@ -1,12 +1,31 @@
-export type Severity = 'critical' | 'high' | 'medium' | 'low';
-export type IncidentStatus = 'active' | 'resolved' | 'investigating';
+export type Severity = "critical" | "high" | "medium" | "low" | "info";
+
+export type EventSource =
+  | "GitHub"
+  | "Datadog"
+  | "AWS"
+  | "PostgreSQL"
+  | "Application Logs"
+  | "Kubernetes"
+  | "Payments"
+  | "Redis"
+  | "PagerDuty";
+
+export type EventType =
+  | "deployment"
+  | "metric"
+  | "log"
+  | "alert"
+  | "error"
+  | "health"
+  | "resource";
 
 export interface Event {
   id: string;
   timestamp: string;
   service: string;
-  source: string;
-  type: string;
+  source: EventSource;
+  type: EventType;
   message: string;
   severity: Severity;
   incidentId?: string;
@@ -15,65 +34,75 @@ export interface Event {
 export interface Evidence {
   id: string;
   title: string;
-  description: string;
+  detail: string;
   source: string;
   timestamp: string;
-  severity: Severity;
-  metric?: {
-    before: string;
-    after: string;
-  };
+  icon?: string;
 }
 
 export interface Recommendation {
   id: string;
   title: string;
-  reason: string;
-  priority: number;
+  description?: string;
+  primary?: boolean;
 }
 
 export interface Incident {
   id: string;
   title: string;
-  description: string;
   severity: Severity;
   confidence: number;
-  status: IncidentStatus;
+  status: "active" | "investigating" | "resolved" | "mitigated";
   service: string;
-  startTime: string;
-  lastUpdateTime: string;
+  description: string;
   rootCause: string;
+  startTime: string;
+  endTime?: string;
+  correlatedCount: number;
+  affectedServices: string[];
   evidence: Evidence[];
   recommendations: Recommendation[];
-  correlatedServices: string[];
-  correlatedEventCount: number;
   eventIds: string[];
+  timeline: TimelineItem[];
+}
+
+export interface TimelineItem {
+  time: string;
+  title: string;
+  detail: string;
+  icon: string;
 }
 
 export interface Service {
   id: string;
   name: string;
-  health: 'healthy' | 'degraded' | 'critical';
+  health: "healthy" | "degraded" | "critical" | "unknown";
   requestsPerMin: number;
   errorRate: number;
-  latency: number;
+  latencyMs: number;
   activeIncidents: number;
-  dependencies: string[];
+  sparkline: number[];
 }
 
 export interface Scenario {
   id: string;
   title: string;
   description: string;
-  type: 'degradation' | 'failure' | 'leak' | 'noise';
+  steps: string[];
+  type: "incident" | "noise";
+}
+
+export interface KPI {
+  label: string;
+  value: string | number;
+  subtext?: string;
 }
 
 export interface SimulationState {
-  status: 'idle' | 'running' | 'completed';
-  progress: {
-    stage: string;
-    percentage: number;
-  };
-  eventCount: number;
-  incidentCount: number;
+  running: boolean;
+  stage: number;
+  message: string;
+  eventsGenerated: number;
+  candidates: number;
+  incidents: number;
 }

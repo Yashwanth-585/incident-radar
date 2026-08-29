@@ -1,62 +1,87 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect } from 'react';
-import { Layout } from '@/components/layout';
-import { EventTable, EventFilters } from '@/components/events';
-import { LoadingState } from '@/components/ui';
-import { getEvents } from '@/lib/api';
-import { Event } from '@/types';
+import { useEffect, useState, useMemo } from "react";
+import { AppShell } from "@/components/layout/AppShell";
+import { EventTable } from "@/components/events/EventTable";
+import { EventFilters } from "@/components/events/EventFilters";
+import { getEvents } from "@/lib/api";
+import type { Event } from "@/types";
+import { CardSkeleton } from "@/components/ui/LoadingState";
 
 export default function EventsPage() {
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
   const [filters, setFilters] = useState({
-    service: '',
-    severity: '',
-    source: '',
+    search: "",
+    service: "all",
+    source: "all",
+    severity: "all",
   });
 
   useEffect(() => {
-    loadEvents();
+    getEvents().then((data) => {
+      setEvents(data);
+      setLoading(false);
+    });
   }, []);
 
-  const loadEvents = async () => {
-    setLoading(true);
-    try {
-      const data = await getEvents();
-      setEvents(data);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const services = useMemo(
+    () => Array.from(new Set(events.map((e) => e.service))).sort(),
+    [events]
+  );
+  const sources = useMemo(
+    () => Array.from(new Set(events.map((e) => e.source))).sort(),
+    [events]
+  );
 
-  if (loading) {
-    return (
-      <Layout title="Operational Events">
-        <LoadingState />
-      </Layout>
-    );
-  }
+  const filtered = useMemo(() => {
+    let result = events;
+    if (filters.service !== "all") {
+      result = result.filter((e) => e.service === filters.service);
+    }
+    if (filters.source !== "all") {
+      result = result.filter((e) => e.source === filters.source);
+    }
+    if (filters.severity !== "all") {
+      result = result.filter((e) => e.severity === filters.severity);
+    }
+    if (filters.search) {
+      const q = filters.search.toLowerCase();
+      result = result.filter(
+        (e) =>
+          e.message.toLowerCase().includes(q) ||
+          e.service.toLowerCase().includes(q) ||
+          e.source.toLowerCase().includes(q)
+      );
+    }
+    return result.slice(0, 40);
+  }, [events, filters]);
 
   return (
-    <Layout title="Operational Events" subtitle="Explore raw signals and event data across your infrastructure">
-      <div className="space-y-6">
-        <div className="text-sm text-slate-400">
-          Total: <span className="font-medium text-slate-200">{events.length} events</span>
+    <AppShell title="Operational Events">
+      <div className="space-y-5 max-w-7xl">
+        <div>
+          <h2 className="text-xl font-semibold text-zinc-50">
+            Operational Events
+          </h2>
+          <p className="text-sm text-zinc-500 mt-1">
+            {loading ? "Loading..." : `${events.length} events`}
+          </p>
         </div>
 
         <EventFilters
-          onSearch={setSearchTerm}
-          onFilterChange={setFilters}
-          onReset={() => {
-            setSearchTerm('');
-            setFilters({ service: '', severity: '', source: '' });
-          }}
+          filters={filters}
+          onChange={setFilters}
+          services={services}
+          sources={sources}
         />
 
-        <EventTable events={events} searchTerm={searchTerm} filters={filters} />
+        {loading ? (
+          <CardSkeleton lines={8} />
+        ) : (
+          <EventTable events={filtered} />
+        )}
       </div>
-    </Layout>
+    </AppShell>
   );
 }

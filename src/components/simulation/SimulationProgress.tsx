@@ -1,71 +1,44 @@
-import React from 'react';
-import { Card } from '@/components/ui';
+"use client";
 
-export interface SimulationStage {
-  stage: string;
-  percentage: number;
-  events?: number;
-}
+import type { SimulationState } from "@/types";
+import { Loader2 } from "lucide-react";
 
-interface SimulationProgressProps {
-  stages: SimulationStage[];
-  finalEventCount: number;
-  candidateIncidents: number;
-  confirmedIncidents: number;
-}
+export function SimulationProgress({ state }: { state: SimulationState }) {
+  if (!state.running && state.stage === 0) return null;
 
-export function SimulationProgress({
-  stages,
-  finalEventCount,
-  candidateIncidents,
-  confirmedIncidents,
-}: SimulationProgressProps) {
   return (
-    <Card>
-      <div className="space-y-6">
-        <div>
-          <h3 className="font-semibold text-slate-100 mb-4">Simulation Progress</h3>
-
-          {/* Stages */}
-          <div className="space-y-3">
-            {stages.map((stage, idx) => (
-              <div key={idx}>
-                <div className="flex items-center justify-between mb-1">
-                  <div className="text-sm text-slate-300">{stage.stage}</div>
-                  <div className="text-xs text-slate-500">{stage.percentage}%</div>
-                </div>
-                <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
-                  <div
-                    className="bg-blue-600 h-full transition-all duration-300"
-                    style={{ width: `${stage.percentage}%` }}
-                  />
-                </div>
-                {stage.events !== undefined && (
-                  <div className="text-xs text-slate-500 mt-1">{stage.events} events</div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Results */}
-        <div className="pt-4 border-t border-slate-700 space-y-3">
-          <div className="grid grid-cols-3 gap-4">
-            <div className="bg-slate-800/50 rounded p-3 text-center">
-              <div className="text-xs text-slate-500 mb-1">Total Events</div>
-              <div className="text-lg font-semibold text-slate-100">{finalEventCount}</div>
-            </div>
-            <div className="bg-slate-800/50 rounded p-3 text-center">
-              <div className="text-xs text-slate-500 mb-1">Candidates</div>
-              <div className="text-lg font-semibold text-slate-100">{candidateIncidents}</div>
-            </div>
-            <div className="bg-blue-900/30 rounded p-3 text-center border border-blue-800">
-              <div className="text-xs text-blue-400 mb-1">Confirmed</div>
-              <div className="text-lg font-semibold text-blue-300">{confirmedIncidents}</div>
-            </div>
+    <div className="rounded-lg border border-blue-500/20 bg-blue-950/15 px-4 py-3.5">
+      <div className="flex items-center gap-3">
+        {state.running && (
+          <Loader2 className="h-4 w-4 text-blue-400 animate-spin shrink-0" />
+        )}
+        <div className="flex-1 min-w-0">
+          <p className="text-[13px] font-medium text-zinc-100">
+            {state.message}
+          </p>
+          <div className="flex flex-wrap gap-4 mt-1.5 text-[11px] text-zinc-500 tabular">
+            {state.eventsGenerated > 0 && (
+              <span>{state.eventsGenerated} events</span>
+            )}
+            {state.candidates > 0 && (
+              <span>{state.candidates} candidates</span>
+            )}
+            {state.incidents > 0 && (
+              <span className="text-emerald-400/90">
+                {state.incidents} incidents identified
+              </span>
+            )}
           </div>
         </div>
       </div>
-    </Card>
+      {state.running && (
+        <div className="mt-3 h-0.5 rounded-full bg-zinc-800 overflow-hidden">
+          <div
+            className="h-full bg-blue-500 transition-all duration-500 rounded-full"
+            style={{ width: `${Math.min(100, state.stage * 14)}%` }}
+          />
+        </div>
+      )}
+    </div>
   );
 }
