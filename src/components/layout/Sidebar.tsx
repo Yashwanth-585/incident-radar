@@ -9,7 +9,6 @@ import {
   AlertTriangle,
   Activity,
   Server,
-  Play,
   Settings,
   PanelLeftClose,
   PanelLeft,
@@ -20,7 +19,6 @@ const nav = [
   { href: "/incidents", label: "Incidents", icon: AlertTriangle },
   { href: "/events", label: "Events", icon: Activity },
   { href: "/services", label: "Services", icon: Server },
-  { href: "/simulation", label: "Simulation", icon: Play },
 ];
 
 export function Sidebar() {

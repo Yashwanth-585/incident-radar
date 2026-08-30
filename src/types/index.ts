@@ -113,3 +113,43 @@ export interface SimulationState {
   candidates: number;
   incidents: number;
 }
+
+// ── Lyzr AI Analysis types ──────────────────────────────────
+
+export interface AiAnalysisHypothesis {
+  hypothesis: string;
+  supporting_evidence: string[];
+  contradicting_evidence: string[];
+  likelihood: string;
+}
+
+export interface AiAnalysisAction {
+  action: string;
+  priority: string;
+  rationale: string;
+}
+
+export interface AiAnalysisRollback {
+  recommended: boolean;
+  reason: string;
+  target?: string;
+}
+
+export interface AiAnalysis {
+  id: string;
+  incidentId: string;
+  severity: string;
+  confidence: number;
+  evidenceQuality: string;
+  rootCause: string;
+  earliestAbnormalSignal: string;
+  causalChain: string[];
+  downstreamSymptoms: string[];
+  hypotheses: AiAnalysisHypothesis[];
+  missingEvidence: string[];
+  recommendedActions: AiAnalysisAction[];
+  rollbackRecommendation: AiAnalysisRollback;
+  reasoningSummary: string;
+  createdAt: string;
+}
+

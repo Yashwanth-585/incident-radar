@@ -54,7 +54,7 @@ export default function EventsPage() {
           e.source.toLowerCase().includes(q)
       );
     }
-    return result.slice(0, 40);
+    return result;
   }, [events, filters]);
 
   return (

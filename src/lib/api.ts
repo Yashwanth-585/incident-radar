@@ -1,18 +1,99 @@
-import { events } from "@/data/events";
-import { incidents } from "@/data/incidents";
-import { services } from "@/data/services";
-import { scenarios } from "@/data/scenarios";
-import type { Event, Incident, Service, Scenario } from "@/types";
+import type { Event, Incident, Service } from "@/types";
 
 export async function getIncidents(): Promise<Incident[]> {
-  // Simulate small latency
-  await delay(80);
-  return incidents;
+  try {
+    const res = await fetch("/api/incidents");
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    return data.map((d: any) => ({
+      id: d.incident_id || String(d.id),
+      title: d.incident_title || d.title,
+      severity: d.severity || "info",
+      confidence: d.correlation_score
+        ? Math.round(d.correlation_score * 100)
+        : d.confidence || 0,
+      status: d.status || "active",
+      service:
+        d.affected_services && d.affected_services.length > 0
+          ? d.affected_services[0]
+          : d.service || "unknown",
+      description: d.description ?? "",
+      rootCause: d.root_cause ?? "",
+      startTime: d.start_time || new Date().toISOString(),
+      endTime: d.end_time ?? undefined,
+      correlatedCount: d.event_count || d.correlated_count || 0,
+      affectedServices: d.affected_services ?? [],
+      evidence: (d.correlation_reasons ?? []).map((reason: string) => ({
+        type: "temporal",
+        description: reason,
+        strength: 1,
+      })),
+      recommendations: d.metadata?.recommendations ?? [],
+      eventIds: [],
+      timeline: [],
+    }));
+  } catch (error) {
+    console.error("Failed to fetch incidents", error);
+    return [];
+  }
 }
 
 export async function getIncident(id: string): Promise<Incident | null> {
-  await delay(60);
-  return incidents.find((i) => i.id === id) ?? null;
+  try {
+    const res = await fetch(`/api/incidents/${id}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    // Fetch clean events for this incident
+    const eventsRes = await fetch(`/api/events?incidentId=${id}`);
+    const eventsData = eventsRes.ok ? await eventsRes.json() : [];
+
+    const timeline = eventsData.map((e: any) => {
+      const date = new Date(e.timestamp);
+      const timeStr = `${String(date.getHours()).padStart(2, "0")}:${String(
+        date.getMinutes()
+      ).padStart(2, "0")}`;
+
+      return {
+        time: timeStr,
+        title: e.message,
+        detail: e.service,
+        icon: "activity",
+      };
+    });
+
+    return {
+      id: data.incident_id || String(data.id),
+      title: data.incident_title || data.title,
+      severity: data.severity || "info",
+      confidence: data.correlation_score
+        ? Math.round(data.correlation_score * 100)
+        : data.confidence || 0,
+      status: data.status || "active",
+      service:
+        data.affected_services && data.affected_services.length > 0
+          ? data.affected_services[0]
+          : data.service || "unknown",
+      description: data.description ?? "",
+      rootCause: data.root_cause ?? "",
+      startTime: data.start_time || new Date().toISOString(),
+      endTime: data.end_time ?? undefined,
+      correlatedCount: data.event_count || data.correlated_count || 0,
+      affectedServices: data.affected_services ?? [],
+      evidence: (data.correlation_reasons ?? []).map((reason: string) => ({
+        type: "temporal",
+        description: reason,
+        strength: 1,
+      })),
+      recommendations: data.metadata?.recommendations ?? [],
+      eventIds: eventsData.map((e: any) => e.event_id || e.id),
+      timeline,
+    };
+  } catch (error) {
+    console.error(`Failed to fetch incident ${id}`, error);
+    return null;
+  }
 }
 
 export async function getEvents(filters?: {
@@ -21,62 +102,69 @@ export async function getEvents(filters?: {
   severity?: string;
   search?: string;
 }): Promise<Event[]> {
-  await delay(100);
-  let result = [...events];
+  try {
+    const params = new URLSearchParams();
+    if (filters?.service) params.set("service", filters.service);
+    if (filters?.source) params.set("source", filters.source);
+    if (filters?.severity) params.set("severity", filters.severity);
+    if (filters?.search) params.set("search", filters.search);
 
-  if (filters?.service && filters.service !== "all") {
-    result = result.filter((e) => e.service === filters.service);
-  }
-  if (filters?.source && filters.source !== "all") {
-    result = result.filter((e) => e.source === filters.source);
-  }
-  if (filters?.severity && filters.severity !== "all") {
-    result = result.filter((e) => e.severity === filters.severity);
-  }
-  if (filters?.search) {
-    const q = filters.search.toLowerCase();
-    result = result.filter(
-      (e) =>
-        e.message.toLowerCase().includes(q) ||
-        e.service.toLowerCase().includes(q) ||
-        e.source.toLowerCase().includes(q)
-    );
-  }
+    const res = await fetch(`/api/events?${params.toString()}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
 
-  return result;
+    return data.map((e: any) => ({
+      id: e.event_id || String(e.id),
+      incidentId: e.incident_id,
+      service: e.service ?? "unknown",
+      source: e.source ?? "unknown",
+      type: e.event_type ?? "log",
+      message: e.message,
+      severity: e.severity ?? "info",
+      timestamp: e.timestamp,
+      metric: e.metric,
+      value: e.value,
+      metadata: e.metadata,
+    }));
+  } catch (error) {
+    console.error("Failed to fetch events", error);
+    return [];
+  }
 }
 
 export async function getEventsByIncident(incidentId: string): Promise<Event[]> {
-  await delay(50);
-  return events.filter((e) => e.incidentId === incidentId);
+  try {
+    const res = await fetch(`/api/events?incidentId=${incidentId}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    return data.map((e: any) => ({
+      id: e.event_id || String(e.id),
+      incidentId: incidentId,
+      service: e.service ?? "unknown",
+      source: e.source ?? "unknown",
+      type: e.event_type ?? "log",
+      message: e.message,
+      severity: e.severity ?? "info",
+      timestamp: e.timestamp,
+      metric: e.metric,
+      value: e.value,
+      metadata: e.metadata,
+    }));
+  } catch (error) {
+    console.error(`Failed to fetch events for incident ${incidentId}`, error);
+    return [];
+  }
 }
 
 export async function getServices(): Promise<Service[]> {
-  await delay(70);
-  return services;
-}
-
-export async function getScenarios(): Promise<Scenario[]> {
-  await delay(40);
-  return scenarios;
-}
-
-export async function runSimulation(scenarioId: string): Promise<{
-  eventsGenerated: number;
-  candidates: number;
-  incidentsIdentified: number;
-}> {
-  await delay(200);
-  // Frontend-only mock response
-  if (scenarioId === "scenario-noise") {
-    return { eventsGenerated: 28, candidates: 2, incidentsIdentified: 0 };
+  try {
+    const res = await fetch("/api/services");
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    return data;
+  } catch (error) {
+    console.error("Failed to fetch services", error);
+    return [];
   }
-  if (scenarioId === "scenario-payment") {
-    return { eventsGenerated: 42, candidates: 7, incidentsIdentified: 4 };
-  }
-  return { eventsGenerated: 35, candidates: 5, incidentsIdentified: 3 };
-}
-
-function delay(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }

@@ -43,7 +43,7 @@ export default function ServicesPage() {
           </div>
         )}
 
-        <DependencyGraph />
+        <DependencyGraph services={services} />
       </div>
     </AppShell>
   );

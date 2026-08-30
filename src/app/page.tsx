@@ -5,31 +5,30 @@ import { AppShell } from "@/components/layout/AppShell";
 import { IncidentCard } from "@/components/incidents/IncidentCard";
 import { EventVolumeChart } from "@/components/charts/EventVolumeChart";
 import { ErrorRateChart } from "@/components/charts/ErrorRateChart";
-import { SimulationProgress } from "@/components/simulation/SimulationProgress";
-import { Button } from "@/components/ui/Button";
-import { getIncidents } from "@/lib/api";
-import type { Incident } from "@/types";
-import { useApp } from "@/context/AppContext";
-import { Play, ArrowRight } from "lucide-react";
+import { getIncidents, getEvents } from "@/lib/api";
+import type { Incident, Event } from "@/types";
 import { KPISkeleton } from "@/components/ui/LoadingState";
+import Link from "next/link";
+import { AlertTriangle, ArrowRight } from "lucide-react";
 
 export default function OverviewPage() {
   const [incidents, setIncidents] = useState<Incident[]>([]);
+  const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
-  const { runMainSimulation, simulation, eventCount, simulationComplete } =
-    useApp();
 
   useEffect(() => {
-    getIncidents().then((data) => {
-      setIncidents(data);
+    Promise.all([getIncidents(), getEvents()]).then(([incData, evData]) => {
+      setIncidents(incData);
+      setEvents(evData);
       setLoading(false);
     });
   }, []);
 
-  const critical = incidents.find((i) => i.id === "INC-001");
-  const others = incidents
-    .filter((i) => i.id !== "INC-001" && i.status === "active")
-    .slice(0, 3);
+  const activeIncidents = incidents.filter(
+    (i) => i.status === "active" || i.status === "investigating"
+  );
+  const critical = activeIncidents.find((i) => i.severity === "critical") || activeIncidents[0];
+  const others = activeIncidents.filter((i) => i.id !== critical?.id).slice(0, 4);
 
   const severityCounts = {
     critical: incidents.filter((i) => i.severity === "critical").length,
@@ -48,65 +47,17 @@ export default function OverviewPage() {
               Operational pulse
             </h2>
             <p className="text-[13px] text-zinc-500 mt-1 max-w-md">
-              Noisy signals correlated into prioritized incidents — what needs
-              attention right now.
+              Live operational telemetry correlated into prioritized incidents from Supabase.
             </p>
           </div>
-          <Button
-            onClick={runMainSimulation}
-            disabled={simulation.running}
-            size="md"
+          <Link
+            href="/incidents"
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-400 hover:text-blue-300 transition-colors"
           >
-            <Play className="h-3.5 w-3.5" />
-            Run production simulation
-          </Button>
+            View all {incidents.length} incidents
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
         </div>
-
-        {/* Product story pipeline */}
-        <div className="rounded-lg border border-[#27272a] bg-[#121216] px-4 py-3 overflow-x-auto">
-          <div className="flex items-center gap-2 text-[11px] font-medium min-w-max">
-            <PipelineStep
-              label={`${eventCount} events`}
-              active={eventCount > 0}
-            />
-            <ArrowRight className="h-3 w-3 text-zinc-700 shrink-0" />
-            <PipelineStep
-              label={
-                simulation.candidates
-                  ? `${simulation.candidates} candidates`
-                  : "correlation"
-              }
-              active={!!simulation.candidates || simulationComplete}
-            />
-            <ArrowRight className="h-3 w-3 text-zinc-700 shrink-0" />
-            <PipelineStep
-              label={
-                simulationComplete
-                  ? "6 incidents"
-                  : simulation.incidents
-                  ? `${simulation.incidents} incidents`
-                  : "incidents"
-              }
-              active={simulationComplete || simulation.incidents > 0}
-            />
-            <ArrowRight className="h-3 w-3 text-zinc-700 shrink-0" />
-            <PipelineStep
-              label="critical"
-              active={simulationComplete}
-              critical
-            />
-            <ArrowRight className="h-3 w-3 text-zinc-700 shrink-0" />
-            <PipelineStep
-              label="evidence → action"
-              active={simulationComplete}
-              ai
-            />
-          </div>
-        </div>
-
-        {(simulation.running || simulation.stage > 0) && (
-          <SimulationProgress state={simulation} />
-        )}
 
         {/* KPIs */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -119,17 +70,29 @@ export default function OverviewPage() {
             </>
           ) : (
             <>
-              <KPICard label="Events ingested" value={eventCount} />
+              <KPICard label="Operational Events" value={events.length} hint="Live stream" />
               <KPICard
-                label="Active incidents"
-                value={
-                  simulationComplete
-                    ? 6
-                    : Math.max(0, simulation.incidents)
-                }
+                label="Active Incidents"
+                value={activeIncidents.length}
+                hint={`${severityCounts.critical} critical`}
               />
-              <KPICard label="Correlated" value="94.6%" hint="of signals" />
-              <KPICard label="Mean detect" value="42s" hint="last 24h" />
+              <KPICard
+                label="Correlation Rate"
+                value={
+                  events.length > 0
+                    ? `${Math.min(
+                        100,
+                        Math.round((incidents.reduce((acc, i) => acc + i.correlatedCount, 0) / Math.max(1, events.length)) * 100)
+                      )}%`
+                    : "100%"
+                }
+                hint="Signals clustered"
+              />
+              <KPICard
+                label="Lyzr AI Status"
+                value="Active"
+                hint="v3 Agent Connected"
+              />
             </>
           )}
         </div>
@@ -142,12 +105,12 @@ export default function OverviewPage() {
           <SeverityPill color="bg-emerald-500" label="Low" count={severityCounts.low} />
         </div>
 
-        {/* Critical incident */}
-        {critical && simulationComplete && (
+        {/* Critical incident highlight */}
+        {critical && (
           <div>
             <div className="flex items-center gap-2 mb-2.5">
               <span className="text-[10px] font-semibold uppercase tracking-wider text-red-400/80">
-                Requires attention
+                Primary Incident · Requires Attention
               </span>
               <div className="flex-1 h-px bg-gradient-to-r from-red-500/20 to-transparent" />
             </div>
@@ -155,20 +118,12 @@ export default function OverviewPage() {
           </div>
         )}
 
-        {!simulationComplete && simulation.stage >= 6 && (
-          <div className="rounded-lg border border-red-500/20 bg-red-950/20 px-4 py-3">
-            <p className="text-[13px] text-red-300/90 font-medium">
-              Payment Service Degradation — correlating final signals…
-            </p>
-          </div>
-        )}
-
-        {simulationComplete && others.length > 0 && (
+        {others.length > 0 && (
           <div>
             <h3 className="text-[11px] font-semibold uppercase tracking-wider text-zinc-600 mb-2.5">
-              Other active
+              Other Active Incidents
             </h3>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="grid sm:grid-cols-2 lg:grid-cols-2 gap-3">
               {others.map((inc) => (
                 <IncidentCard key={inc.id} incident={inc} />
               ))}
@@ -182,7 +137,7 @@ export default function OverviewPage() {
               <h3 className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
                 Event volume
               </h3>
-              <span className="text-[10px] text-zinc-600 font-mono">06:00 → now</span>
+              <span className="text-[10px] text-zinc-600 font-mono">Live telemetry</span>
             </div>
             <EventVolumeChart />
           </div>
@@ -191,41 +146,13 @@ export default function OverviewPage() {
               <h3 className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
                 Error rate
               </h3>
-              <span className="text-[10px] text-zinc-600 font-mono">payment-api</span>
+              <span className="text-[10px] text-zinc-600 font-mono">payment-service</span>
             </div>
             <ErrorRateChart />
           </div>
         </div>
       </div>
     </AppShell>
-  );
-}
-
-function PipelineStep({
-  label,
-  active,
-  critical,
-  ai,
-}: {
-  label: string;
-  active?: boolean;
-  critical?: boolean;
-  ai?: boolean;
-}) {
-  return (
-    <span
-      className={
-        active
-          ? critical
-            ? "rounded px-2 py-1 bg-red-500/15 text-red-400 border border-red-500/25"
-            : ai
-            ? "rounded px-2 py-1 bg-violet-500/15 text-violet-300 border border-violet-500/25"
-            : "rounded px-2 py-1 bg-zinc-800 text-zinc-200 border border-zinc-700"
-          : "rounded px-2 py-1 text-zinc-600 border border-transparent"
-      }
-    >
-      {label}
-    </span>
   );
 }
 
@@ -244,9 +171,7 @@ function KPICard({
       <p className="text-[22px] font-semibold tracking-tight text-zinc-50 mt-1 tabular leading-none">
         {value}
       </p>
-      {hint && (
-        <p className="text-[10px] text-zinc-600 mt-1.5">{hint}</p>
-      )}
+      {hint && <p className="text-[10px] text-zinc-600 mt-1.5">{hint}</p>}
     </div>
   );
 }

@@ -136,39 +136,64 @@ export async function getIncidentBundleById(incidentId: string): Promise<Inciden
   const { data: incidentData, error: incidentError } = await supabase
     .from("incidents")
     .select("*")
-    .eq("id", incidentId)
+    .eq("incident_id", incidentId)
     .single();
 
   if (incidentError || !incidentData) return null;
 
-  const { data: eventsData } = await supabase.from("events").select("*").eq("incident_id", incidentId);
-  const { data: relationshipsData } = await supabase
-    .from("event_relationships")
-    .select("*")
+  // Fetch linked event IDs from junction table
+  const { data: links } = await supabase
+    .from("incident_events")
+    .select("event_id")
     .eq("incident_id", incidentId);
+
+  const eventIds = (links ?? []).map((l: any) => l.event_id);
+
+  let eventsData: any[] = [];
+  if (eventIds.length > 0) {
+    const { data: evs } = await supabase
+      .from("events")
+      .select("*")
+      .in("event_id", eventIds);
+    eventsData = evs ?? [];
+  }
+
+  // Fetch relationships involving these events
+  let relationshipsData: any[] = [];
+  if (eventIds.length > 0) {
+    const { data: rels } = await supabase
+      .from("event_relationships")
+      .select("*")
+      .in("from_event_id", eventIds);
+    relationshipsData = rels ?? [];
+  }
 
   return {
     incident: {
-      id: incidentData.id,
-      title: incidentData.title,
+      id: incidentData.incident_id,
+      title: incidentData.incident_title,
       severity: incidentData.severity,
-      confidence: incidentData.confidence,
+      confidence: incidentData.correlation_score ? Math.round(incidentData.correlation_score * 100) : 0,
       status: incidentData.status,
-      service: incidentData.service,
+      service: incidentData.affected_services?.[0] || "unknown",
       description: incidentData.description ?? "",
       rootCause: incidentData.root_cause ?? "",
       startTime: incidentData.start_time,
       endTime: incidentData.end_time ?? undefined,
-      correlatedCount: incidentData.correlated_count,
+      correlatedCount: incidentData.event_count || 0,
       affectedServices: incidentData.affected_services ?? [],
-      evidence: incidentData.metadata?.evidence ?? [],
+      evidence: (incidentData.correlation_reasons ?? []).map((reason: string) => ({
+        type: "temporal",
+        description: reason,
+        strength: 1
+      })),
       recommendations: incidentData.metadata?.recommendations ?? [],
-      eventIds: (eventsData ?? []).map((event: any) => event.id),
+      eventIds: eventIds,
       timeline: [],
     },
-    events: (eventsData ?? []).map((event: any) => ({
-      id: event.id,
-      incident_id: event.incident_id,
+    events: eventsData.map((event: any) => ({
+      id: event.event_id,
+      incident_id: incidentId,
       service: event.service ?? "unknown-service",
       source: event.source ?? "Application Logs",
       event_type: event.event_type,
@@ -179,11 +204,11 @@ export async function getIncidentBundleById(incidentId: string): Promise<Inciden
       value: event.value,
       metadata: event.metadata ?? {},
     })),
-    relationships: (relationshipsData ?? []).map((relationship: any) => ({
-      incident_id: relationship.incident_id,
+    relationships: relationshipsData.map((relationship: any) => ({
+      incident_id: incidentId,
       from_event_id: relationship.from_event_id,
       to_event_id: relationship.to_event_id,
-      relationship_type: relationship.relationship_type,
+      relationship_type: relationship.relationship || "PRECEDES",
       metadata: relationship.metadata ?? {},
     })),
   };
